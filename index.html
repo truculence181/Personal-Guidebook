@@ -308,6 +308,62 @@
   .chip.pin-chip{color:var(--accent-deep);}
   .chip.pin-chip.active{background:var(--accent); border-color:var(--accent); color:#fff;}
 
+  .filter-bar{
+    display:flex; align-items:center; gap:8px;
+    margin-top:20px;
+    flex-wrap:wrap;
+  }
+  .select-wrap{
+    position:relative;
+    flex:1;
+    min-width:150px;
+  }
+  .select-wrap::after{
+    content:"▾";
+    position:absolute; right:12px; top:50%;
+    transform:translateY(-50%);
+    pointer-events:none;
+    color:var(--ink-faint);
+    font-size:11px;
+  }
+  #catSelect{
+    -webkit-appearance:none; appearance:none;
+    width:100%;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:8px 30px 8px 14px;
+    font-family:'Inter', sans-serif;
+    font-size:13px;
+    font-weight:500;
+    color:var(--ink);
+    cursor:pointer;
+    box-shadow:var(--shadow-xs);
+  }
+  #catSelect:focus{outline:none; border-color:var(--accent);}
+  #catSelect:disabled{cursor:default;}
+  #catSelect option{background:var(--surface); color:var(--ink);}
+
+  .chip-divider{
+    width:1px;
+    align-self:stretch;
+    background:var(--line);
+    margin:2px 4px;
+    flex-shrink:0;
+  }
+  .radius-row{
+    margin-top:10px;
+    align-items:center;
+  }
+  .radius-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-faint);
+    flex-shrink:0;
+    padding-right:2px;
+  }
+  .radius-chip{padding:6px 12px; font-size:11px;}
+
   .surprise{
     font-family:'JetBrains Mono', monospace;
     font-size:11.5px;
@@ -841,15 +897,25 @@
 
     <div class="status-line" id="statusLine">Uses location data only in your browser — nothing is stored on a server.</div>
 
-    <div class="chips" id="chips">
-      <button class="chip active" data-cat="all">All</button>
-      <button class="chip" data-cat="outdoors">Outdoors</button>
-      <button class="chip" data-cat="food">Food & Drink</button>
-      <button class="chip" data-cat="nightlife">Nightlife</button>
-      <button class="chip" data-cat="culture">Culture</button>
-      <button class="chip" data-cat="open">Open now</button>
-      <button class="chip pin-chip" data-cat="pinned">★ Pinned</button>
-      <button class="chip plan-chip" data-cat="plan">◷ Day plan</button>
+    <div class="filter-bar">
+      <button class="chip pin-chip" id="viewPinned">★ Pinned</button>
+      <button class="chip plan-chip" id="viewPlan">◷ Day plan</button>
+      <span class="chip-divider"></span>
+      <div class="select-wrap">
+        <select id="catSelect" aria-label="Category">
+          <option value="all">All categories</option>
+        </select>
+      </div>
+      <button class="chip" id="openNow">Open now</button>
+    </div>
+
+    <div class="chips radius-row" id="radiusChips">
+      <span class="radius-label">Within</span>
+      <button class="chip radius-chip" data-mi="5">5 mi</button>
+      <button class="chip radius-chip active" data-mi="10">10 mi</button>
+      <button class="chip radius-chip" data-mi="20">20 mi</button>
+      <button class="chip radius-chip" data-mi="30">30 mi</button>
+      <button class="chip radius-chip" data-mi="50">50 mi</button>
     </div>
     <button class="surprise" id="surpriseBtn">✦ Surprise me with something open</button>
   </div>
@@ -924,7 +990,44 @@ const SEED_PLACES = [
    hours:{Mon:[720,120],Tue:[720,120],Wed:[720,120],Thu:[720,120],Fri:[660,120],Sat:[660,120],Sun:[720,120]}, phone:"+1 281-431-9146", source:"seed", photo:null}
 ];
 
-const CAT_LABEL = {outdoors:"Outdoors", food:"Food & Drink", nightlife:"Nightlife", culture:"Culture"};
+/* ---------- categories ----------
+   Each entry drives three things: the chip label, the Overpass selectors we
+   fetch, and how a returned place gets classified. Keeping them in one place
+   means adding a category is a single edit. */
+const CATEGORIES = [
+  {key:'food',          label:'Restaurants',   sel:['amenity=restaurant','amenity=fast_food','amenity=food_court','amenity=bbq']},
+  {key:'coffee',        label:'Coffee',        sel:['amenity=cafe','shop=coffee','shop=bakery','shop=pastry','amenity=ice_cream']},
+  {key:'bars',          label:'Bars & Pubs',   sel:['amenity=bar','amenity=pub','amenity=biergarten','craft=brewery','shop=wine']},
+  {key:'nightlife',     label:'Nightlife',     sel:['amenity=nightclub','amenity=casino','leisure=dance']},
+  {key:'outdoors',      label:'Parks & Trails',sel:['leisure=park','leisure=garden','leisure=nature_reserve','leisure=dog_park','leisure=playground']},
+  {key:'scenic',        label:'Scenic',        sel:['tourism=viewpoint','natural=beach','natural=peak','natural=waterfall','natural=spring','waterway=waterfall']},
+  {key:'culture',       label:'Museums & Art', sel:['tourism=museum','tourism=gallery','tourism=artwork','amenity=arts_centre','amenity=library']},
+  {key:'historic',      label:'Historic',      sel:['historic=monument','historic=memorial','historic=ruins','historic=castle','historic=archaeological_site','historic=building','amenity=place_of_worship']},
+  {key:'entertainment', label:'Entertainment', sel:['amenity=cinema','amenity=theatre','tourism=zoo','tourism=aquarium','tourism=theme_park','leisure=bowling_alley','leisure=escape_game','leisure=water_park']},
+  {key:'shopping',      label:'Shopping',      sel:['shop=mall','shop=department_store','amenity=marketplace','shop=books','shop=antiques','shop=art']},
+  {key:'wellness',      label:'Wellness',      sel:['leisure=spa','shop=massage','leisure=fitness_centre','leisure=sauna','amenity=public_bath']},
+  {key:'lodging',       label:'Stay',          sel:['tourism=hotel','tourism=motel','tourism=guest_house','tourism=hostel','tourism=chalet','tourism=camp_site']}
+];
+const CAT_LABEL = Object.fromEntries(CATEGORIES.map(c => [c.key, c.label]));
+// Reverse lookup: "amenity=cafe" -> "coffee". First match wins, so order above
+// is also precedence order.
+const TAG_TO_CAT = (() => {
+  const m = {};
+  CATEGORIES.forEach(c => c.sel.forEach(s => { if(!(s in m)) m[s] = c.key; }));
+  return m;
+})();
+function classifyTags(tags){
+  for(const [k, v] of Object.entries(tags)){
+    const hit = TAG_TO_CAT[`${k}=${v}`];
+    if(hit) return hit;
+  }
+  // Sensible catch-alls for tags we query loosely.
+  if(tags.leisure || tags.natural) return 'outdoors';
+  if(tags.historic) return 'historic';
+  if(tags.tourism) return 'scenic';
+  if(tags.shop) return 'shopping';
+  return 'outdoors';
+}
 
 /* ---------- cover art: real photo when we have one, otherwise a
    category tile that never breaks or shows a blank box ---------- */
@@ -934,16 +1037,24 @@ const COVER_ART = {
   nightlife: {grad:"var(--cover-nightlife)", icon:'<path d="M6 4h12l-1.3 7.6a4.7 4.7 0 0 1-9.4 0L6 4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><line x1="12" y1="15.6" x2="12" y2="20" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="20" x2="16" y2="20" stroke="currentColor" stroke-width="1.4"/>'},
   culture: {grad:"var(--cover-culture)", icon:'<path d="M12 3l7 5H5l7-5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><rect x="5" y="9" width="14" height="9" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="3" y1="20" x2="21" y2="20" stroke="currentColor" stroke-width="1.4"/>'}
 };
+const COVER_ALIAS = {
+  coffee:'food', bars:'nightlife', scenic:'outdoors', historic:'culture',
+  entertainment:'nightlife', shopping:'food', wellness:'outdoors', lodging:'culture'
+};
 function coverFor(p){
-  const art = COVER_ART[p.cat] || COVER_ART.outdoors;
+  const art = COVER_ART[p.cat] || COVER_ART[COVER_ALIAS[p.cat]] || COVER_ART.outdoors;
   const fallback = `<div class="cover-fallback" style="color:var(--cover-icon)"><svg viewBox="0 0 24 24">${art.icon}</svg></div>`;
   const img = p.photo ? `<img src="${p.photo}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();">` : "";
   return `<div class="card-cover" style="background:${art.grad}">${fallback}${img}</div>`;
 }
 
 let userLoc = null;
+let lastCenter = null;      // where the last fetch was centred
+let lastLabel = null;       // human name for that centre
 let activePlaces = SEED_PLACES;
-let activeCat = "all";
+let activeView = "browse";   // browse | pinned | plan
+let activeCat = "all";       // all | category key
+let openOnly = false;
 let pinnedIds = new Set();
 let pinnedStore = {}; // id -> full place object, so pinned view survives dataset changes
 
@@ -1279,12 +1390,6 @@ function parseOsmHours(str){
 }
 
 /* ---------- live data (OpenStreetMap) ---------- */
-function classifyTags(tags){
-  if(tags.amenity==='cafe'||tags.amenity==='restaurant'||tags.amenity==='fast_food') return 'food';
-  if(tags.amenity==='bar'||tags.amenity==='pub'||tags.amenity==='nightclub') return 'nightlife';
-  if(tags.tourism==='museum'||tags.tourism==='attraction'||tags.amenity==='place_of_worship') return 'culture';
-  return 'outdoors';
-}
 function describeTags(tags){
   const bits=[];
   if(tags.cuisine) bits.push(tags.cuisine.replace(/_/g,' ')+" cuisine");
@@ -1383,24 +1488,29 @@ const OVERPASS_MIRRORS = [
   "https://overpass.openstreetmap.ru/api/interpreter"
 ];
 
-async function fetchLivePlaces(lat, lon){
-  const query = `[out:json][timeout:25];(
-    node["leisure"="park"](around:6000,${lat},${lon});
-    node["tourism"="viewpoint"](around:9000,${lat},${lon});
-    node["natural"="beach"](around:12000,${lat},${lon});
-    node["amenity"="cafe"](around:4000,${lat},${lon});
-    node["amenity"="restaurant"](around:4000,${lat},${lon});
-    node["amenity"="bar"](around:4000,${lat},${lon});
-    node["amenity"="pub"](around:4000,${lat},${lon});
-    node["amenity"="nightclub"](around:5000,${lat},${lon});
-    node["tourism"="museum"](around:9000,${lat},${lon});
-    node["tourism"="attraction"](around:9000,${lat},${lon});
-    node["amenity"="place_of_worship"](around:6000,${lat},${lon});
-  );out body 80;`;
+const MI_TO_M = 1609.34;
+let searchRadiusMi = 10;
+
+async function fetchLivePlaces(lat, lon, radiusMi){
+  const mi = radiusMi || searchRadiusMi;
+  const m = Math.round(mi * MI_TO_M);
+  // Wide radii over many categories can overwhelm the free Overpass servers,
+  // so ask for fewer results per category as the area grows.
+  const cap = mi <= 10 ? 250 : mi <= 30 ? 350 : 450;
+  const clauses = CATEGORIES.flatMap(cat =>
+    cat.sel.map(sel => {
+      const [k, v] = sel.split('=');
+      return `node["${k}"="${v}"](around:${m},${lat},${lon});`;
+    })
+  ).join('\n    ');
+
+  const query = `[out:json][timeout:${mi > 30 ? 60 : 30}];(
+    ${clauses}
+  );out body ${cap};`;
 
   let lastErr;
   for(const endpoint of OVERPASS_MIRRORS){
-    const t = withTimeout(null, 12000);
+    const t = withTimeout(null, mi > 30 ? 30000 : 18000);
     try{
       const resp = await fetch(endpoint, {method:"POST", body:query, signal:t.signal});
       t.clear();
@@ -1432,9 +1542,6 @@ async function fetchLivePlaces(lat, lon){
   throw new Error(`all Overpass mirrors failed (${lastErr ? lastErr.message : 'unknown error'})`);
 }
 
-// Nominatim's usage policy caps clients at 1 request/second. Enforce it here
-// so rapid searches queue instead of getting the IP blocked.
-let lastGeocodeAt = 0;
 async function geocode(query){
   const wait = 1100 - (Date.now() - lastGeocodeAt);
   if(wait > 0) await new Promise(r => setTimeout(r, wait));
@@ -1903,44 +2010,54 @@ function renderPlan(list, label){
   updateCompass([]);
 }
 
+function sectionLabelText(count){
+  if(activeView === "pinned") return "Pinned places";
+  const cat = activeCat === "all" ? "Nearby" : CAT_LABEL[activeCat];
+  const bits = [cat];
+  if(openOnly) bits.push("open now");
+  if(userLoc) bits.push(`within ${searchRadiusMi} mi`);
+  return bits.join(" · ");
+}
+
 /* ---------- rendering ---------- */
 function render(){
   const list = document.getElementById("cardList");
   const label = document.getElementById("sectionLabel");
   let items;
 
-  if(activeCat === "plan"){
+  if(activeView === "plan"){
     renderPlan(list, label);
     return;
   }
 
-  if(activeCat === "pinned"){
+  if(activeView === "pinned"){
     items = Object.values(pinnedStore);
     // Your own ratings are the most useful ordering for places you've saved.
     items.sort((a,b) => markFor(b.id).stars - markFor(a.id).stars);
-    label.textContent = "Pinned places";
   } else {
     items = activePlaces.slice();
-    if(activeCat === "open"){
-      items = items.filter(p => openStatus(p.hours).open === true);
-    } else if(activeCat !== "all"){
-      items = items.filter(p => p.cat === activeCat);
-    }
+    if(activeCat !== "all") items = items.filter(p => p.cat === activeCat);
   }
+  if(openOnly) items = items.filter(p => openStatus(p.hours).open === true);
 
   if(userLoc){
     items.forEach(p => p._dist = haversine(userLoc.lat, userLoc.lng, p.lat, p.lng));
-    items.sort((a,b) => a._dist - b._dist);
-    if(activeCat !== "pinned"){
-      label.textContent = activeCat === "all" ? "Nearby, closest first" : (CAT_LABEL[activeCat] || "Open now") + ", closest first";
+    // Respect the distance filter, but never hide something you saved.
+    if(activeView !== "pinned"){
+      items = items.filter(p => p._dist <= searchRadiusMi + 0.5);
     }
-  } else if(activeCat !== "pinned"){
+    items.sort((a,b) => a._dist - b._dist);
+  } else if(activeView !== "pinned"){
     items.sort((a,b) => (b.rating||0) - (a.rating||0));
-    label.textContent = activeCat === "all" ? "Highest rated" : (CAT_LABEL[activeCat] || "Open now") + " · highest rated";
   }
+  label.textContent = sectionLabelText(items.length);
 
   if(items.length === 0){
-    const msg = activeCat === "pinned" ? "Nothing pinned yet — tap the ☆ on any place to save it here." : "Nothing in this category right now — try another filter.";
+    const msg = activeView === "pinned"
+      ? "Nothing pinned yet — tap the ☆ on any place to save it here."
+      : openOnly
+        ? "Nothing open right now in this category — try turning off Open now."
+        : `Nothing found within ${searchRadiusMi} miles — try a wider radius or another category.`;
     list.innerHTML = `<div class="empty">${msg}</div>`;
     updateCompass([]);
     return;
@@ -2076,6 +2193,8 @@ document.getElementById("locateBtn").addEventListener("click", () => {
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       userLoc = {lat:pos.coords.latitude, lng:pos.coords.longitude};
+      lastCenter = {lat:userLoc.lat, lng:userLoc.lng};
+      lastLabel = null;
       document.getElementById("coordsBox").innerHTML = `position — <span>${userLoc.lat.toFixed(4)}, ${userLoc.lng.toFixed(4)}</span>`;
       btn.textContent = "📍 Re-check my location";
       statusLine.textContent = "Located. Fetching what's around you…";
@@ -2086,8 +2205,8 @@ document.getElementById("locateBtn").addEventListener("click", () => {
         activePlaces = livePlaces;
         document.getElementById("sourceNote").textContent = "Showing mapped spots around you";
         statusLine.textContent = livePlaces.length
-          ? `Found ${livePlaces.length} spots near you.`
-          : "Nothing mapped nearby — try searching a larger town.";
+          ? `Found ${livePlaces.length} spots within ${searchRadiusMi} miles.`
+          : `Nothing mapped within ${searchRadiusMi} miles — try a wider radius.`;
         btn.disabled = false;
         render();
         // Photos arrive a beat later; re-render once they're in.
@@ -2146,6 +2265,8 @@ async function runSearch(){
       return;
     }
     userLoc = {lat: place.lat, lng: place.lng};
+    lastCenter = {lat: place.lat, lng: place.lng};
+    lastLabel = place.label;
     document.getElementById("coordsBox").innerHTML = `position — <span>${userLoc.lat.toFixed(4)}, ${userLoc.lng.toFixed(4)}</span>`;
     document.getElementById("sourceNote").textContent = `Showing community-mapped spots near ${place.label}`;
     statusLine.textContent = "Fetching nearby spots…";
@@ -2154,8 +2275,8 @@ async function runSearch(){
       const livePlaces = await fetchLivePlaces(place.lat, place.lng);
       activePlaces = livePlaces;
       statusLine.textContent = livePlaces.length
-        ? `Found ${livePlaces.length} mapped spots near ${place.label}.`
-        : `No mapped spots turned up near ${place.label} — try a nearby city.`;
+        ? `Found ${livePlaces.length} spots within ${searchRadiusMi} miles of ${place.label}.`
+        : `Nothing mapped within ${searchRadiusMi} miles of ${place.label} — try a wider radius.`;
       render();
       // Photos arrive a beat later; re-render once they're in.
       await attachWikiPhotos(livePlaces);
@@ -2173,14 +2294,83 @@ async function runSearch(){
   }
 }
 
-document.getElementById("chips").addEventListener("click", (e) => {
-  const chip = e.target.closest(".chip");
+document.getElementById("radiusChips").addEventListener("click", async (e) => {
+  const chip = e.target.closest(".radius-chip");
   if(!chip) return;
-  document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+  document.querySelectorAll(".radius-chip").forEach(c => c.classList.remove("active"));
   chip.classList.add("active");
-  activeCat = chip.dataset.cat;
+  const prev = searchRadiusMi;
+  searchRadiusMi = +chip.dataset.mi;
+  render();   // instant narrowing while any refetch runs
+
+  // Widening needs fresh data; narrowing can just filter what we have.
+  if(searchRadiusMi > prev && lastCenter){
+    const statusLine = document.getElementById("statusLine");
+    statusLine.textContent = `Widening to ${searchRadiusMi} miles…`;
+    try{
+      const places = await fetchLivePlaces(lastCenter.lat, lastCenter.lng);
+      activePlaces = places;
+      statusLine.textContent = `Found ${places.length} spots within ${searchRadiusMi} miles${lastLabel ? ' of ' + lastLabel : ''}.`;
+      render();
+      await attachWikiPhotos(places);
+      if(activePlaces === places) render();
+    }catch(err){
+      console.error("Overpass error:", err);
+      statusLine.textContent = `Couldn't widen the search: ${err.message}`;
+    }
+  }
+});
+
+// Build the category list from the taxonomy so the two can't drift apart.
+const CAT_ICON = {food:'🍽', coffee:'☕', bars:'🍺', nightlife:'🎶', outdoors:'🌳',
+  scenic:'⛰', culture:'🏛', historic:'🏰', entertainment:'🎭', shopping:'🛍',
+  wellness:'💆', lodging:'🛏'};
+const catSelect = document.getElementById("catSelect");
+CATEGORIES.forEach(cat => {
+  const opt = document.createElement("option");
+  opt.value = cat.key;
+  opt.textContent = `${CAT_ICON[cat.key] || ''} ${cat.label}`.trim();
+  catSelect.appendChild(opt);
+});
+
+const viewPinned = document.getElementById("viewPinned");
+const viewPlan = document.getElementById("viewPlan");
+const openNowBtn = document.getElementById("openNow");
+
+function syncControls(){
+  viewPinned.classList.toggle("active", activeView === "pinned");
+  viewPlan.classList.toggle("active", activeView === "plan");
+  openNowBtn.classList.toggle("active", openOnly);
+  catSelect.value = activeCat;
+  // Category and distance don't apply to the saved lists, so dim them there.
+  const browsing = activeView === "browse";
+  catSelect.disabled = !browsing;
+  openNowBtn.disabled = activeView === "plan";
+  document.getElementById("radiusChips").style.opacity = browsing ? "" : ".4";
+  document.querySelector(".select-wrap").style.opacity = browsing ? "" : ".4";
+}
+
+function setView(v){
+  activeView = (activeView === v) ? "browse" : v;
+  syncControls();
+  render();
+}
+viewPinned.addEventListener("click", () => setView("pinned"));
+viewPlan.addEventListener("click", () => setView("plan"));
+openNowBtn.addEventListener("click", () => {
+  if(activeView === "plan") return;
+  openOnly = !openOnly;
+  syncControls();
   render();
 });
+catSelect.addEventListener("change", () => {
+  activeCat = catSelect.value;
+  // Choosing a category means you want to browse, not stay in a saved list.
+  if(activeView !== "browse"){ activeView = "browse"; }
+  syncControls();
+  render();
+});
+syncControls();
 
 document.getElementById("surpriseBtn").addEventListener("click", () => {
   const pool = activePlaces.filter(p => openStatus(p.hours).open === true);
