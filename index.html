@@ -560,8 +560,6 @@
   .mark-btn:active{transform:scale(0.85);}
   .mark-btn.star{font-size:20px;}
   .mark-btn.star.on{color:#E0A32E;}
-  .mark-btn.cash{font-size:16px; font-weight:700; font-family:'Inter',sans-serif;}
-  .mark-btn.cash.on{color:var(--good);}
 
   .card-marks{
     display:flex; align-items:center; gap:10px;
@@ -570,12 +568,6 @@
   }
   .face-stars .star{font-size:13px; color:var(--ink-faint);}
   .face-stars .star.on{color:#E0A32E;}
-  .face-price .cash{
-    font-size:12px; font-weight:700;
-    font-family:'Inter',sans-serif;
-    color:var(--line);
-  }
-  .face-price .cash.on{color:var(--good);}
   .plan-place .card-marks{padding:4px 0 0;}
 
   .slot-opt{
@@ -1089,15 +1081,15 @@ let dayPlan = emptyPlan();
 /* ---------- your ratings & price ----------
    Open map data carries no ratings or price fields, so these are yours:
    stored encrypted with everything else, and never sent anywhere. */
-let myMarks = {};   // id -> {stars: 0-5, price: 0-5}
-function markFor(id){ return myMarks[id] || {stars:0, price:0}; }
+let myMarks = {};   // id -> {stars: 0-5}
+function markFor(id){ return myMarks[id] || {stars:0}; }
 let openDrawerId = null;
 function setMark(id, field, value){
   openDrawerId = id;
-  const cur = Object.assign({stars:0, price:0}, myMarks[id]);
+  const cur = Object.assign({stars:0}, myMarks[id]);
   // Tapping the same value again clears it, so a misclick is one tap to undo.
   cur[field] = (cur[field] === value) ? 0 : value;
-  if(!cur.stars && !cur.price) delete myMarks[id];
+  if(!cur.stars) delete myMarks[id];
   else myMarks[id] = cur;
   savePins();
   render();
@@ -1110,17 +1102,6 @@ function starsHTML(id, interactive){
     out += interactive
       ? `<button class="mark-btn star ${on?'on':''}" data-id="${id}" data-field="stars" data-val="${i}" aria-label="${i} star${i>1?'s':''}">${on?'★':'☆'}</button>`
       : `<span class="star ${on?'on':''}">${on?'★':'☆'}</span>`;
-  }
-  return out;
-}
-function priceHTML(id, interactive){
-  const {price} = markFor(id);
-  let out = '';
-  for(let i=1;i<=5;i++){
-    const on = i <= price;
-    out += interactive
-      ? `<button class="mark-btn cash ${on?'on':''}" data-id="${id}" data-field="price" data-val="${i}" aria-label="price level ${i}">$</button>`
-      : `<span class="cash ${on?'on':''}">$</span>`;
   }
   return out;
 }
@@ -1585,6 +1566,7 @@ const SALT_KEY   = 'afield-salt';      // legacy (pre-envelope) installs
 const VAULT_KEY  = 'afield-vault';     // pins, encrypted with the DEK
 const WRAP_PIN   = 'afield-wrap-pin';  // DEK wrapped by PIN-derived key
 const WRAP_BIO   = 'afield-wrap-bio';  // DEK wrapped by passkey-derived key
+const WRAP_DEV   = 'afield-wrap-dev';  // weaker fallback: see enrolDeviceUnlock()
 let dek = null;                        // live DEK once unlocked
 
 function b64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
@@ -1684,7 +1666,60 @@ async function bioAvailable(){
     return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
   }catch(e){ return false; }
 }
-function bioEnrolled(){ return !!readJSON(WRAP_BIO); }
+function bioEnrolled(){ return !!readJSON(WRAP_BIO) || !!readJSON(WRAP_DEV); }
+function bioMode(){ return readJSON(WRAP_BIO) ? 'prf' : (readJSON(WRAP_DEV) ? 'device' : null); }
+
+/* Fallback for devices whose passkeys lack the PRF extension.
+
+   IMPORTANT, and deliberately not glossed over: here Face ID only *gates*
+   access — the wrapping key sits in local storage in the clear. It stops
+   someone who picks up your unlocked phone. It does NOT stop someone who can
+   read your browser's storage directly. The PRF path above does. */
+async function enrolDeviceUnlock(){
+  const cred = await navigator.credentials.create({
+    publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: {name: 'Afield', id: RP_ID},
+      user: {id: crypto.getRandomValues(new Uint8Array(16)), name:'afield', displayName:'Afield'},
+      pubKeyCredParams: [{type:'public-key', alg:-7}, {type:'public-key', alg:-257}],
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        residentKey: 'required',
+        userVerification: 'required'
+      },
+      timeout: 60000
+    }
+  });
+  const credId = b64(cred.rawId);
+  const raw = crypto.getRandomValues(new Uint8Array(32));
+  const localKey = await crypto.subtle.importKey('raw', raw, {name:'AES-GCM'}, false, ['encrypt','decrypt']);
+  const wrapped = await wrapDEK(localKey, dek);
+  localStorage.setItem(WRAP_DEV, JSON.stringify({credId, k: b64(raw), ...wrapped}));
+}
+
+async function unlockWithDevice(){
+  const rec = readJSON(WRAP_DEV);
+  if(!rec) throw new Error('No device unlock enrolled.');
+  // The assertion is the gate: no Face ID, no unlock.
+  await navigator.credentials.get({
+    publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rpId: RP_ID,
+      allowCredentials: [{type:'public-key', id: unb64(rec.credId)}],
+      userVerification: 'required',
+      timeout: 60000
+    }
+  });
+  const localKey = await crypto.subtle.importKey('raw', unb64(rec.k), {name:'AES-GCM'}, false, ['encrypt','decrypt']);
+  dek = await unwrapDEK(localKey, {iv:rec.iv, data:rec.data});
+  try{
+    unpackVault(await decryptWith(dek, readJSON(VAULT_KEY)));
+  }catch(e){
+    localStorage.removeItem(WRAP_DEV);
+    dek = null;
+    throw new Error('Device unlock is out of date — use your PIN and re-enable it.');
+  }
+}
 
 // Enrol a platform passkey and wrap the DEK with its PRF output.
 async function enrolBio(){
@@ -1785,15 +1820,24 @@ async function refreshBioUI(){
   bioToggle.style.display = supported ? 'flex' : 'none';
   if(!supported) return;
   const on = bioEnrolled();
+  const mode = bioMode();
   bioToggle.textContent = on ? '☺' : '☹';
   bioToggle.classList.toggle('on', on);
-  bioToggle.title = on ? 'Face ID is on — tap to turn off' : 'Face ID is off — tap to enable';
+  bioToggle.title = !on ? 'Face ID is off — tap to enable'
+    : mode === 'prf' ? 'Face ID on (key derived from passkey) — tap to turn off'
+    : 'Face ID on (lighter mode: key stored on device) — tap to turn off';
 }
 async function maybeOfferBio(){
   await refreshBioUI();
   const dismissed = localStorage.getItem('afield-bio-dismissed');
   if(bioEnrolled() || dismissed || !(await bioAvailable())) return;
   bioOffer.style.display = 'flex';
+}
+// If enrolment fails for a reason that won't change (no PRF support), stop
+// offering it rather than showing the same error every launch.
+function noteBioUnsupported(msg){
+  try{ localStorage.setItem('afield-bio-dismissed', '1'); }catch(e){}
+  bioOffer.style.display = 'none';
 }
 
 async function showLockUI(){
@@ -1831,7 +1875,8 @@ async function tryBio(silent){
   lockError.textContent = '';
   bioBtn.disabled = true;
   try{
-    await unlockWithBio();
+    if(bioMode() === 'prf') await unlockWithBio();
+    else await unlockWithDevice();
     enterApp();
   }catch(e){
     console.warn('Face ID unlock failed:', e);
@@ -1880,6 +1925,7 @@ async function migrateToEnvelope(pin){
   // A new DEK orphans any existing passkey wrapper, so drop it and let the
   // user re-enable rather than leaving a wrapper that silently won't work.
   localStorage.removeItem(WRAP_BIO);
+  localStorage.removeItem(WRAP_DEV);
   dek = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
   await writePinWrap(pin);
   localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, vaultPayload())));
@@ -1896,6 +1942,7 @@ async function setPin(){
   dayPlan = emptyPlan();
   myMarks = {};
   localStorage.removeItem(WRAP_BIO);
+  localStorage.removeItem(WRAP_DEV);
   dek = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
   await writePinWrap(pin);
   localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, vaultPayload())));
@@ -1911,13 +1958,28 @@ pinInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') lockSubmit.c
 pinConfirm.addEventListener('keydown', (e) => { if(e.key === 'Enter') lockSubmit.click(); });
 
 async function turnBioOn(){
-  await enrolBio();
+  try{
+    await enrolBio();
+  }catch(e){
+    if(!/PRF/i.test(e.message || '')) throw e;
+    // No PRF on this device. Offer the weaker mode, but say plainly what the
+    // difference is rather than quietly downgrading their security.
+    const ok = confirm(
+      "This device's passkeys can't produce an encryption key (needs iOS 18+ / Safari 18+).\n\n" +
+      "Alternative: Face ID can still unlock the app, but the key would be stored on this device rather than derived from your face. " +
+      "That stops someone who picks up your phone — it doesn't stop someone who can read your browser storage directly.\n\n" +
+      "Your PIN keeps full protection either way.\n\nEnable the lighter Face ID unlock?"
+    );
+    if(!ok){ noteBioUnsupported(); throw new Error('Face ID unlock not enabled.'); }
+    await enrolDeviceUnlock();
+  }
   await refreshBioUI();
 }
 bioToggle.addEventListener('click', async () => {
   if(bioEnrolled()){
     if(!confirm('Turn off Face ID unlock? Your PIN will still work, and your saved places are untouched.')) return;
     localStorage.removeItem(WRAP_BIO);
+    localStorage.removeItem(WRAP_DEV);
     await refreshBioUI();
     return;
   }
@@ -1942,10 +2004,9 @@ bioEnable.addEventListener('click', async () => {
     setTimeout(() => { bioOffer.style.display = 'none'; }, 3500);
   }catch(e){
     console.warn('Face ID setup failed:', e);
-    bioEnable.disabled = false;
-    bioEnable.textContent = 'Try again';
-    const msg = document.getElementById('bioMsg');
-    if(msg) msg.textContent = e.message || 'Could not set up Face ID on this device.';
+    // Don't leave a dead error sitting in the header forever.
+    noteBioUnsupported();
+    await refreshBioUI();
   }
 });
 bioDismiss.addEventListener('click', () => {
@@ -1955,7 +2016,7 @@ bioDismiss.addEventListener('click', () => {
 
 lockReset.addEventListener('click', () => {
   if(confirm('This permanently deletes your pinned places and Face ID setup on this device. It cannot be undone. Reset?')){
-    [VAULT_KEY, SALT_KEY, WRAP_PIN, WRAP_BIO, 'afield-bio-dismissed'].forEach(k => localStorage.removeItem(k));
+    [VAULT_KEY, SALT_KEY, WRAP_PIN, WRAP_BIO, WRAP_DEV, 'afield-bio-dismissed'].forEach(k => localStorage.removeItem(k));
     showLockUI();
   }
 });
@@ -1986,8 +2047,6 @@ function slotPickerHTML(p){
     <div class="slot-row">${opts}<button class="slot-opt ${sightOn?'on':''}" data-slot="sight" data-id="${p.id}">◉ Sight</button></div>
     <div class="drawer-label">Your rating</div>
     <div class="mark-row">${starsHTML(p.id, true)}</div>
-    <div class="drawer-label">Price</div>
-    <div class="mark-row">${priceHTML(p.id, true)}</div>
   </div>`;
 }
 
@@ -2217,10 +2276,8 @@ function render(){
 
 function markRowHTML(id){
   const m = markFor(id);
-  if(!m.stars && !m.price) return '';
-  const s = m.stars ? `<span class="face-stars">${starsHTML(id, false)}</span>` : '';
-  const pr = m.price ? `<span class="face-price">${priceHTML(id, false)}</span>` : '';
-  return `<div class="card-marks">${s}${pr}</div>`;
+  if(!m.stars) return '';
+  return `<div class="card-marks"><span class="face-stars">${starsHTML(id, false)}</span></div>`;
 }
 
 function updateCompass(items){
