@@ -456,6 +456,193 @@
   .card-actions a:last-child{border-right:none;}
   .card-actions a:active{background:var(--bg);}
 
+  .chip.plan-chip{color:var(--accent-deep);}
+  .chip.plan-chip.active{background:var(--accent); border-color:var(--accent); color:#fff;}
+
+  .card-add{
+    position:absolute; top:10px; right:52px;
+    width:34px; height:34px;
+    border-radius:50%;
+    background:var(--glass);
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    font-size:17px; color:var(--ink-soft);
+    box-shadow:var(--shadow-sm);
+    transition:transform .15s ease;
+  }
+  .card-add:active{transform:scale(0.88);}
+  .card-add.on{color:#fff; background:var(--accent);}
+
+  .slot-picker{
+    display:none;
+    flex-direction:column; gap:5px;
+    padding:0 16px 14px;
+  }
+  .slot-picker.open{display:flex;}
+  .slot-row{display:flex; gap:6px; flex-wrap:wrap;}
+  .drawer-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size:9.5px; letter-spacing:.11em; text-transform:uppercase;
+    color:var(--ink-faint);
+    margin-top:6px;
+  }
+  .drawer-label:first-child{margin-top:0;}
+  .mark-row{display:flex; gap:2px; align-items:center;}
+  .mark-btn{
+    background:none; border:none; cursor:pointer;
+    padding:2px 3px; line-height:1;
+    color:var(--ink-faint);
+    transition:transform .1s ease;
+  }
+  .mark-btn:active{transform:scale(0.85);}
+  .mark-btn.star{font-size:20px;}
+  .mark-btn.star.on{color:#E0A32E;}
+  .mark-btn.cash{font-size:16px; font-weight:700; font-family:'Inter',sans-serif;}
+  .mark-btn.cash.on{color:var(--good);}
+
+  .card-marks{
+    display:flex; align-items:center; gap:10px;
+    padding:0 16px 10px;
+    line-height:1;
+  }
+  .face-stars .star{font-size:13px; color:var(--ink-faint);}
+  .face-stars .star.on{color:#E0A32E;}
+  .face-price .cash{
+    font-size:12px; font-weight:700;
+    font-family:'Inter',sans-serif;
+    color:var(--line);
+  }
+  .face-price .cash.on{color:var(--good);}
+  .plan-place .card-marks{padding:4px 0 0;}
+
+  .slot-opt{
+    font-family:'Inter', sans-serif;
+    font-size:12px; font-weight:500;
+    padding:7px 11px;
+    border-radius:9px;
+    border:1px solid var(--line);
+    background:var(--bg);
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .slot-opt:active{transform:scale(0.96);}
+  .slot-opt.on{background:var(--accent); border-color:var(--accent); color:#fff;}
+
+  /* ---------- PLAN VIEW ---------- */
+  .plan-card{
+    background:var(--surface);
+    border-radius:18px;
+    box-shadow:var(--shadow-sm);
+    overflow:hidden;
+    margin-bottom:16px;
+  }
+  .plan-head{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:16px;
+    border-bottom:1px solid var(--line);
+  }
+  .plan-date{font-family:'Fraunces', serif; font-weight:600; font-size:18px;}
+  .plan-sub{
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    color:var(--ink-faint); margin-top:3px;
+  }
+  .plan-datepick{
+    background:var(--bg); border:1px solid var(--line);
+    border-radius:9px; padding:7px 9px;
+    font-family:'JetBrains Mono', monospace; font-size:11.5px;
+    color:var(--ink);
+  }
+  .plan-row{
+    display:flex; align-items:center; gap:12px;
+    padding:13px 16px;
+    border-bottom:1px solid var(--line);
+  }
+  .plan-row:last-of-type{border-bottom:none;}
+  .plan-time{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px; letter-spacing:.04em;
+    color:var(--ink-soft);
+    width:96px; flex-shrink:0;
+    display:flex; flex-direction:column; gap:2px;
+  }
+  .plan-clock{font-size:10px; color:var(--ink-faint);}
+  .plan-place{flex:1; font-size:14px; line-height:1.35;}
+  .plan-place a{color:var(--ink); text-decoration:none; font-weight:500;}
+  .plan-place a:active{color:var(--accent);}
+  .plan-place.muted{color:var(--ink-faint); font-size:13px; font-style:italic;}
+  .plan-warn{
+    display:block; margin-top:3px;
+    font-family:'JetBrains Mono', monospace; font-size:10.5px;
+    color:var(--rust);
+  }
+  .plan-x{
+    background:none; border:none; cursor:pointer;
+    font-size:19px; line-height:1; color:var(--ink-faint);
+    padding:0 2px; flex-shrink:0;
+  }
+  .plan-x:active{color:var(--rust);}
+  .plan-divider{
+    padding:10px 16px 6px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-faint);
+    background:var(--bg);
+    border-bottom:1px solid var(--line);
+  }
+  .plan-leg{
+    display:flex; align-items:center; gap:8px;
+    padding:0 16px 0 22px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:10px;
+    color:var(--ink-faint);
+    height:22px;
+  }
+  .leg-line{
+    width:1px; height:100%;
+    background:var(--line);
+    margin-left:2px;
+  }
+  .plan-badge{font-weight:500; color:var(--ink-soft);}
+  .plan-badge.meal{color:var(--accent-deep);}
+  .plan-ctrl{display:flex; align-items:center; gap:2px; flex-shrink:0;}
+  .plan-mv{
+    background:none; border:none; cursor:pointer;
+    font-size:13px; line-height:1; color:var(--ink-faint);
+    padding:4px 3px;
+  }
+  .plan-mv:disabled{opacity:.25; cursor:default;}
+  .plan-mv:active:not(:disabled){color:var(--accent);}
+  .plan-missing{
+    padding:12px 16px;
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    color:var(--ink-faint);
+    border-top:1px solid var(--line);
+  }
+  .plan-opt{
+    width:100%;
+    background:var(--bg); border:none;
+    border-top:1px solid var(--line);
+    padding:12px;
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    letter-spacing:.04em; text-transform:uppercase;
+    color:var(--accent-deep);
+    cursor:pointer;
+  }
+  .plan-opt:active{background:var(--line);}
+
+  .plan-clear{
+    width:100%;
+    background:none; border:none;
+    border-top:1px solid var(--line);
+    padding:12px;
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    letter-spacing:.04em; text-transform:uppercase;
+    color:var(--ink-faint);
+    cursor:pointer;
+  }
+  .plan-clear:active{color:var(--rust);}
+
   .empty{
     text-align:center;
     padding:44px 20px;
@@ -662,6 +849,7 @@
       <button class="chip" data-cat="culture">Culture</button>
       <button class="chip" data-cat="open">Open now</button>
       <button class="chip pin-chip" data-cat="pinned">★ Pinned</button>
+      <button class="chip plan-chip" data-cat="plan">◷ Day plan</button>
     </div>
     <button class="surprise" id="surpriseBtn">✦ Surprise me with something open</button>
   </div>
@@ -759,6 +947,195 @@ let activeCat = "all";
 let pinnedIds = new Set();
 let pinnedStore = {}; // id -> full place object, so pinned view survives dataset changes
 
+/* ---------- day plan ----------
+   One ordered list of stops. Meals are unique and carry a default time so we
+   can check "open then?"; sights are unlimited. Order is the day's sequence,
+   so sights can sit before, between, or after meals. */
+const SLOTS = [
+  {key:'breakfast', label:'Breakfast', mins:540,  icon:'☕'},
+  {key:'lunch',     label:'Lunch',     mins:780,  icon:'🍽'},
+  {key:'dinner',    label:'Dinner',    mins:1140, icon:'🌙'}
+];
+const SLOT_BY_KEY = Object.fromEntries(SLOTS.map(s => [s.key, s]));
+const MEAL_KEYS = SLOTS.map(s => s.key);
+
+function emptyPlan(){
+  const d = new Date();
+  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return {date: iso, stops: []};
+}
+let dayPlan = emptyPlan();
+
+/* ---------- your ratings & price ----------
+   Open map data carries no ratings or price fields, so these are yours:
+   stored encrypted with everything else, and never sent anywhere. */
+let myMarks = {};   // id -> {stars: 0-5, price: 0-5}
+function markFor(id){ return myMarks[id] || {stars:0, price:0}; }
+let openDrawerId = null;
+function setMark(id, field, value){
+  openDrawerId = id;
+  const cur = Object.assign({stars:0, price:0}, myMarks[id]);
+  // Tapping the same value again clears it, so a misclick is one tap to undo.
+  cur[field] = (cur[field] === value) ? 0 : value;
+  if(!cur.stars && !cur.price) delete myMarks[id];
+  else myMarks[id] = cur;
+  savePins();
+  render();
+}
+function starsHTML(id, interactive){
+  const {stars} = markFor(id);
+  let out = '';
+  for(let i=1;i<=5;i++){
+    const on = i <= stars;
+    out += interactive
+      ? `<button class="mark-btn star ${on?'on':''}" data-id="${id}" data-field="stars" data-val="${i}" aria-label="${i} star${i>1?'s':''}">${on?'★':'☆'}</button>`
+      : `<span class="star ${on?'on':''}">${on?'★':'☆'}</span>`;
+  }
+  return out;
+}
+function priceHTML(id, interactive){
+  const {price} = markFor(id);
+  let out = '';
+  for(let i=1;i<=5;i++){
+    const on = i <= price;
+    out += interactive
+      ? `<button class="mark-btn cash ${on?'on':''}" data-id="${id}" data-field="price" data-val="${i}" aria-label="price level ${i}">$</button>`
+      : `<span class="cash ${on?'on':''}">$</span>`;
+  }
+  return out;
+}
+
+function planDayIndex(){
+  const [y,m,d] = dayPlan.date.split('-').map(Number);
+  return new Date(y, m-1, d).getDay();
+}
+function planCount(){ return dayPlan.stops.length; }
+function inPlan(id){ return dayPlan.stops.some(s => s.id === id); }
+function slotOf(id, slot){
+  return dayPlan.stops.some(s => s.id === id && s.slot === slot);
+}
+function stripPlace(place){
+  const {_dist, _wiki, ...clean} = place;
+  return clean;
+}
+// A stop's nominal time: meals use their slot time; a sight inherits the
+// midpoint between the meals around it, which is what makes ordering useful.
+function stopTime(index){
+  const stop = dayPlan.stops[index];
+  if(stop.slot !== 'sight') return SLOT_BY_KEY[stop.slot].mins;
+  let before = null, after = null;
+  for(let i = index - 1; i >= 0; i--){
+    if(dayPlan.stops[i].slot !== 'sight'){ before = SLOT_BY_KEY[dayPlan.stops[i].slot].mins; break; }
+  }
+  for(let i = index + 1; i < dayPlan.stops.length; i++){
+    if(dayPlan.stops[i].slot !== 'sight'){ after = SLOT_BY_KEY[dayPlan.stops[i].slot].mins; break; }
+  }
+  if(before !== null && after !== null) return Math.round((before + after) / 2);
+  if(before !== null) return Math.min(before + 120, 1320);
+  if(after !== null) return Math.max(after - 120, 480);
+  return 720;
+}
+
+function assignSlot(slotKey, place){
+  const clean = stripPlace(place);
+  const existing = dayPlan.stops.findIndex(s => s.id === clean.id && s.slot === slotKey);
+  if(existing !== -1){                       // tapping the same slot removes it
+    dayPlan.stops.splice(existing, 1);
+    savePins(); render(); return;
+  }
+  // A place can only appear once; move it rather than duplicating.
+  dayPlan.stops = dayPlan.stops.filter(s => s.id !== clean.id);
+  if(slotKey !== 'sight'){
+    // Only one of each meal.
+    dayPlan.stops = dayPlan.stops.filter(s => s.slot !== slotKey);
+  }
+  const entry = Object.assign({}, clean, {slot: slotKey});
+  // Insert meals in chronological position; append sights.
+  if(slotKey === 'sight'){
+    dayPlan.stops.push(entry);
+  } else {
+    const mins = SLOT_BY_KEY[slotKey].mins;
+    let at = dayPlan.stops.length;
+    for(let i = 0; i < dayPlan.stops.length; i++){
+      const s = dayPlan.stops[i];
+      if(s.slot !== 'sight' && SLOT_BY_KEY[s.slot].mins > mins){ at = i; break; }
+    }
+    dayPlan.stops.splice(at, 0, entry);
+  }
+  savePins();
+  render();
+}
+function moveStop(index, dir){
+  const to = index + dir;
+  if(to < 0 || to >= dayPlan.stops.length) return;
+  const arr = dayPlan.stops;
+  [arr[index], arr[to]] = [arr[to], arr[index]];
+  savePins();
+  render();
+}
+function removeStop(index){
+  dayPlan.stops.splice(index, 1);
+  savePins();
+  render();
+}
+function clearPlan(){
+  dayPlan = emptyPlan();
+  savePins();
+  render();
+}
+
+/* Reorder sights to cut travel, without disturbing meal times.
+   Meals stay pinned to their chronological positions; the sights between each
+   pair of meals are re-sequenced nearest-neighbour from the preceding stop. */
+function optimizePlan(){
+  const stops = dayPlan.stops;
+  if(stops.length < 3) return;
+  const segments = [];      // runs of sights, split by meals
+  let current = [];
+  const skeleton = [];
+  stops.forEach(s => {
+    if(s.slot === 'sight'){ current.push(s); }
+    else { segments.push(current); current = []; skeleton.push(s); }
+  });
+  segments.push(current);
+
+  // Anchor each segment: start from the meal before it (or the user's
+  // location for the first segment), and pull the nearest unvisited each time.
+  const out = [];
+  let anchor = userLoc ? {lat:userLoc.lat, lng:userLoc.lng} : (skeleton[0] || segments[0][0]);
+  segments.forEach((seg, i) => {
+    const pool = seg.slice();
+    while(pool.length){
+      let bestIdx = 0, bestD = Infinity;
+      pool.forEach((p, idx) => {
+        const d = haversine(anchor.lat, anchor.lng, p.lat, p.lng);
+        if(d < bestD){ bestD = d; bestIdx = idx; }
+      });
+      const next = pool.splice(bestIdx, 1)[0];
+      out.push(next);
+      anchor = next;
+    }
+    if(skeleton[i]){
+      out.push(skeleton[i]);
+      anchor = skeleton[i];
+    }
+  });
+  dayPlan.stops = out;
+  savePins();
+  render();
+}
+function planLegs(){
+  const legs = [];
+  for(let i = 1; i < dayPlan.stops.length; i++){
+    const a = dayPlan.stops[i-1], b = dayPlan.stops[i];
+    legs[i] = haversine(a.lat, a.lng, b.lat, b.lng);
+  }
+  return legs;
+}
+function planTotal(){
+  return planLegs().reduce((sum, d) => sum + (d || 0), 0);
+}
+
 /* ---------- theme ---------- */
 const THEME_ORDER = ['auto', 'light', 'dark'];
 const THEME_ICON = {auto:'◐', light:'☀', dark:'☾'};
@@ -818,22 +1195,24 @@ function fmtDist(mi){
 
 /* ---------- hours ---------- */
 function dayKey(d){ return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]; }
-function openStatus(hours){
+// atMins lets the planner ask "is this open at 7pm?" rather than "right now".
+function openStatus(hours, atMins, atDay){
   if(!hours) return {open:null, text:"hours unknown"};
   const now = new Date();
-  const todayKey = dayKey(now.getDay());
-  const mins = now.getHours()*60 + now.getMinutes();
+  const planning = typeof atMins === 'number';
+  const todayKey = dayKey(typeof atDay === 'number' ? atDay : now.getDay());
+  const mins = planning ? atMins : now.getHours()*60 + now.getMinutes();
   const todayRanges = hours[todayKey];
-  if(!todayRanges) return {open:false, text:"closed today"};
+  if(!todayRanges) return {open:false, text: planning ? "closed that day" : "closed today"};
   for(let i=0;i<todayRanges.length;i+=2){
     let open = todayRanges[i], close = todayRanges[i+1];
     if(close < open){
-      if(mins >= open || mins < close) return {open:true, text:"open now"};
+      if(mins >= open || mins < close) return {open:true, text: planning ? "open then" : "open now"};
     } else {
-      if(mins >= open && mins < close) return {open:true, text:"open now"};
+      if(mins >= open && mins < close) return {open:true, text: planning ? "open then" : "open now"};
     }
   }
-  return {open:false, text:"closed now"};
+  return {open:false, text: planning ? "closed then" : "closed now"};
 }
 
 /* ---------- readable hours for the card ---------- */
@@ -1132,11 +1511,39 @@ async function unwrapDEK(key, payload){
   return crypto.subtle.importKey('raw', unb64(rawB64), {name:'AES-GCM'}, true, ['encrypt','decrypt']);
 }
 
+// The vault holds both pins and the day plan. Older installs stored a bare
+// pins object, so unpack handles either shape.
+function vaultPayload(){
+  return {__v: 3, pins: pinnedStore, plan: dayPlan, marks: myMarks};
+}
+function unpackVault(obj){
+  if(obj && obj.__v >= 2){
+    pinnedStore = obj.pins || {};
+    myMarks = obj.marks || {};
+    dayPlan = Object.assign(emptyPlan(), obj.plan || {});
+    // Migrate the earlier plan shape (separate meal keys + sights array)
+    // into the ordered stops list.
+    if(!Array.isArray(dayPlan.stops)){
+      const stops = [];
+      if(dayPlan.breakfast) stops.push(Object.assign({}, dayPlan.breakfast, {slot:'breakfast'}));
+      (dayPlan.sights || []).forEach(p => stops.push(Object.assign({}, p, {slot:'sight'})));
+      if(dayPlan.lunch)  stops.push(Object.assign({}, dayPlan.lunch,  {slot:'lunch'}));
+      if(dayPlan.dinner) stops.push(Object.assign({}, dayPlan.dinner, {slot:'dinner'}));
+      dayPlan = {date: dayPlan.date || emptyPlan().date, stops};
+    }
+  } else {
+    pinnedStore = obj || {};
+    myMarks = {};
+    dayPlan = emptyPlan();
+  }
+  pinnedIds = new Set(Object.keys(pinnedStore));
+}
+
 async function savePins(){
   if(!dek) return;
   try{
-    localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, pinnedStore)));
-  }catch(e){ console.error('Could not save pins', e); }
+    localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, vaultPayload())));
+  }catch(e){ console.error('Could not save', e); }
 }
 function togglePin(place){
   if(pinnedIds.has(place.id)){
@@ -1220,8 +1627,7 @@ async function unlockWithBio(){
   const prfBytes = await readPRF(rec.credId, unb64(rec.prfSalt));
   const bioKey = await deriveFromPRF(prfBytes);
   dek = await unwrapDEK(bioKey, {iv:rec.iv, data:rec.data});
-  pinnedStore = await decryptWith(dek, readJSON(VAULT_KEY));
-  pinnedIds = new Set(Object.keys(pinnedStore));
+  unpackVault(await decryptWith(dek, readJSON(VAULT_KEY)));
 }
 
 /* ---------- lock screen ---------- */
@@ -1311,14 +1717,13 @@ async function unlockWithPin(){
     if(pinWrap){
       const key = await deriveFromPin(pin, unb64(pinWrap.salt));
       dek = await unwrapDEK(key, {iv:pinWrap.iv, data:pinWrap.data});
-      pinnedStore = await decryptWith(dek, readJSON(VAULT_KEY));
+      unpackVault(await decryptWith(dek, readJSON(VAULT_KEY)));
     } else {
       // Legacy install: vault was encrypted directly with the PIN key.
       const key = await deriveFromPin(pin, unb64(localStorage.getItem(SALT_KEY)));
-      pinnedStore = await decryptWith(key, readJSON(VAULT_KEY));
+      unpackVault(await decryptWith(key, readJSON(VAULT_KEY)));
       await migrateToEnvelope(pin);   // re-save in the new format
     }
-    pinnedIds = new Set(Object.keys(pinnedStore));
     enterApp();
   }catch(e){
     dek = null;
@@ -1338,7 +1743,7 @@ async function writePinWrap(pin){
 async function migrateToEnvelope(pin){
   dek = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
   await writePinWrap(pin);
-  localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, pinnedStore)));
+  localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, vaultPayload())));
   localStorage.removeItem(SALT_KEY);
 }
 
@@ -1349,9 +1754,10 @@ async function setPin(){
   if(pin !== confirmVal){ lockError.textContent = "PINs don't match."; return; }
   pinnedStore = {};
   pinnedIds = new Set();
+  dayPlan = emptyPlan();
   dek = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
   await writePinWrap(pin);
-  localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, pinnedStore)));
+  localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, vaultPayload())));
   enterApp();
 }
 
@@ -1405,14 +1811,113 @@ document.addEventListener('visibilitychange', () => {
 });
 
 
+function slotPickerHTML(p){
+  const opts = SLOTS.map(s => {
+    const on = slotOf(p.id, s.key);
+    return `<button class="slot-opt ${on?'on':''}" data-slot="${s.key}" data-id="${p.id}">${s.icon} ${s.label}</button>`;
+  }).join('');
+  const sightOn = slotOf(p.id, 'sight');
+  return `<div class="slot-picker">
+    <div class="drawer-label">Add to day</div>
+    <div class="slot-row">${opts}<button class="slot-opt ${sightOn?'on':''}" data-slot="sight" data-id="${p.id}">◉ Sight</button></div>
+    <div class="drawer-label">Your rating</div>
+    <div class="mark-row">${starsHTML(p.id, true)}</div>
+    <div class="drawer-label">Price</div>
+    <div class="mark-row">${priceHTML(p.id, true)}</div>
+  </div>`;
+}
+
+function renderPlan(list, label){
+  label.textContent = "Day plan";
+  const dayName = new Date(dayPlan.date + 'T12:00:00')
+    .toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'});
+  const legs = planLegs();
+  const total = planTotal();
+  const dayIdx = planDayIndex();
+
+  const rows = dayPlan.stops.map((stop, i) => {
+    const meal = stop.slot !== 'sight';
+    const mins = stopTime(i);
+    const st = openStatus(stop.hours, mins, dayIdx);
+    const warn = st.open === false
+      ? `<span class="plan-warn">closed at ${fmtClock(mins)}</span>` : '';
+    const badge = meal
+      ? `${SLOT_BY_KEY[stop.slot].icon} ${SLOT_BY_KEY[stop.slot].label}`
+      : `◉ Sight`;
+    const leg = legs[i] != null
+      ? `<div class="plan-leg"><span class="leg-line"></span>${fmtDist(legs[i])}</div>` : '';
+    return `
+      ${leg}
+      <div class="plan-row">
+        <div class="plan-time">
+          <span class="plan-badge ${meal?'meal':''}">${badge}</span>
+          <span class="plan-clock">${fmtClock(mins)}</span>
+        </div>
+        <div class="plan-place">
+          <a href="https://maps.apple.com/?q=${encodeURIComponent(stop.name)}&ll=${stop.lat},${stop.lng}" rel="noopener">${stop.name}</a>
+          ${markRowHTML(stop.id)}
+          ${warn}
+        </div>
+        <div class="plan-ctrl">
+          <button class="plan-mv" data-i="${i}" data-dir="-1" ${i===0?'disabled':''} title="Move earlier">↑</button>
+          <button class="plan-mv" data-i="${i}" data-dir="1" ${i===dayPlan.stops.length-1?'disabled':''} title="Move later">↓</button>
+          <button class="plan-x" data-i="${i}" title="Remove">×</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  const missing = MEAL_KEYS.filter(k => !dayPlan.stops.some(s => s.slot === k));
+  const missingNote = missing.length
+    ? `<div class="plan-missing">No ${missing.map(k => SLOT_BY_KEY[k].label.toLowerCase()).join(' or ')} chosen yet</div>` : '';
+
+  list.innerHTML = `
+    <div class="plan-card">
+      <div class="plan-head">
+        <div>
+          <div class="plan-date">${dayName}</div>
+          <div class="plan-sub">${planCount()} stop${planCount()===1?'':'s'}${total > 0 ? ` · ${fmtDist(total)} total` : ''}</div>
+        </div>
+        <input type="date" id="planDate" value="${dayPlan.date}" class="plan-datepick">
+      </div>
+      ${rows}
+      ${missingNote}
+      ${planCount() > 2 ? '<button class="plan-opt" id="planOpt">↯ Reorder to cut travel</button>' : ''}
+      ${planCount() ? '<button class="plan-clear" id="planClear">Clear this day</button>' : ''}
+    </div>
+    ${planCount() ? '' : '<div class="empty">Browse places and tap ＋ on a card to build your day.</div>'}
+  `;
+
+  const dp = document.getElementById('planDate');
+  if(dp) dp.addEventListener('change', () => { dayPlan.date = dp.value; savePins(); render(); });
+  const po = document.getElementById('planOpt');
+  if(po) po.addEventListener('click', optimizePlan);
+  const pc = document.getElementById('planClear');
+  if(pc) pc.addEventListener('click', () => {
+    if(confirm('Clear every stop from this day?')) clearPlan();
+  });
+  list.querySelectorAll('.plan-mv').forEach(b =>
+    b.addEventListener('click', () => moveStop(+b.dataset.i, +b.dataset.dir)));
+  list.querySelectorAll('.plan-x').forEach(b =>
+    b.addEventListener('click', () => removeStop(+b.dataset.i)));
+
+  updateCompass([]);
+}
+
 /* ---------- rendering ---------- */
 function render(){
   const list = document.getElementById("cardList");
   const label = document.getElementById("sectionLabel");
   let items;
 
+  if(activeCat === "plan"){
+    renderPlan(list, label);
+    return;
+  }
+
   if(activeCat === "pinned"){
     items = Object.values(pinnedStore);
+    // Your own ratings are the most useful ordering for places you've saved.
+    items.sort((a,b) => markFor(b.id).stars - markFor(a.id).stars);
     label.textContent = "Pinned places";
   } else {
     items = activePlaces.slice();
@@ -1457,6 +1962,7 @@ function render(){
         <div style="position:relative;">
           ${coverFor(p)}
           <button class="card-pin ${isPinned?'pinned':''}" data-id="${p.id}" title="Pin this place">${isPinned ? '★' : '☆'}</button>
+          <button class="card-add ${inPlan(p.id)?'on':''}" data-id="${p.id}" title="Add to day plan">＋</button>
           ${ratingHtml}
         </div>
         <div class="card-body">
@@ -1464,7 +1970,9 @@ function render(){
           <div class="card-cat">${CAT_LABEL[p.cat] || p.cat}${p.source==='osm' && !p.rating ? ' · OSM' : ''}</div>
         </div>
         <div class="card-blurb">${p.blurb}</div>
+        ${slotPickerHTML(p)}
         ${hoursHtml}
+        ${markRowHTML(p.id)}
         <div class="card-meta">
           <span class="${statusClass}">${status.text}</span>
           ${distHtml}
@@ -1486,18 +1994,59 @@ function render(){
     });
   });
 
+  list.querySelectorAll(".card-add").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const picker = btn.closest(".card").querySelector(".slot-picker");
+      if(picker){
+        picker.classList.toggle("open");
+        openDrawerId = picker.classList.contains("open") ? btn.dataset.id : null;
+      }
+    });
+  });
+
+  list.querySelectorAll(".mark-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setMark(btn.dataset.id, btn.dataset.field, +btn.dataset.val);
+    });
+  });
+
+  list.querySelectorAll(".slot-opt").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const place = items.find(p => p.id === btn.dataset.id) || pinnedStore[btn.dataset.id];
+      if(place) assignSlot(btn.dataset.slot, place);
+    });
+  });
+
   // Tapping anywhere on the card opens it in Apple Maps —
   // except the pin button and the action links, which do their own thing.
   list.querySelectorAll(".card").forEach(card => {
     card.addEventListener("click", (e) => {
-      if(e.target.closest(".card-pin")) return;
+      if(e.target.closest(".card-pin") || e.target.closest(".card-add") || e.target.closest(".slot-picker")) return;
       markHandoff();
       if(e.target.closest("a")) return;
       window.location.href = card.dataset.map;
     });
   });
 
+  // Keep a drawer open across re-renders triggered from inside it.
+  if(openDrawerId){
+    const btn = list.querySelector(`.card-add[data-id="${CSS.escape(openDrawerId)}"]`);
+    const picker = btn && btn.closest(".card").querySelector(".slot-picker");
+    if(picker) picker.classList.add("open");
+  }
+
   updateCompass(items);
+}
+
+function markRowHTML(id){
+  const m = markFor(id);
+  if(!m.stars && !m.price) return '';
+  const s = m.stars ? `<span class="face-stars">${starsHTML(id, false)}</span>` : '';
+  const pr = m.price ? `<span class="face-price">${priceHTML(id, false)}</span>` : '';
+  return `<div class="card-marks">${s}${pr}</div>`;
 }
 
 function updateCompass(items){
