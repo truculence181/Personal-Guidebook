@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Afield — Local Explorer</title>
+
+<!-- Network hardening: only the domains this app actually needs can be reached from here,
+     even if a script were somehow injected. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src https://fonts.gstatic.com;
+  connect-src https://nominatim.openstreetmap.org https://overpass-api.de https://overpass.kumi.systems https://overpass.openstreetmap.ru;
+  img-src 'self' data: https:;
+  script-src 'self' 'unsafe-inline';
+  frame-ancestors 'none';
+  base-uri 'none';
+  form-action 'none';
+  manifest-src 'self';
+">
+
+<!-- Home-screen / app-like presentation -->
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Afield">
+<meta name="theme-color" content="#F2F5F7">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23141A1F'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23F2F5F7' stroke-width='2'/%3E%3Cpath d='M50 28 L58 50 L50 72 L42 50 Z' fill='%232E7D93'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F2F5F7;
+    --surface:#FFFFFF;
+    --ink:#141A1F;
+    --ink-soft:#5C6873;
+    --ink-faint:#9AA6B0;
+    --accent:#2E7D93;
+    --accent-deep:#1F5D70;
+    --line:#E1E7EC;
+    --rust:#B0455A;
+    --good:#2C7A6B;
+    --shadow-xs:0 1px 2px rgba(16,28,38,0.05);
+    --shadow-sm:0 3px 10px rgba(16,28,38,0.07), 0 1px 2px rgba(16,28,38,0.05);
+    --shadow-md:0 10px 24px rgba(16,28,38,0.11), 0 2px 6px rgba(16,28,38,0.05);
+    --shadow-lg:0 24px 48px rgba(16,28,38,0.17), 0 8px 16px rgba(16,28,38,0.07);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+    padding-bottom:60px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:640px; margin:0 auto; padding:0 18px;}
+
+  /* ---------- HERO ---------- */
+  .hero{padding:30px 0 20px;}
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--accent-deep);
+    display:flex; align-items:center; gap:8px;
+  }
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent); animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1} 50%{opacity:.25}}
+
+  .hero h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:34px;
+    line-height:1.05;
+    margin-top:8px;
+    letter-spacing:-0.01em;
+    color:var(--ink);
+  }
+  .hero h1 em{font-style:italic; font-weight:500; color:var(--accent-deep);}
+
+  .hero-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    margin-top:16px;
+    gap:14px;
+    padding-top:14px;
+    border-top:1px solid var(--line);
+  }
+  .coords{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11.5px;
+    color:var(--ink-faint);
+    line-height:1.6;
+  }
+  .coords span{color:var(--ink);}
+  .source-note{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10.5px;
+    color:var(--ink-faint);
+    margin-top:2px;
+  }
+
+  /* compass */
+  .compass{
+    width:56px; height:56px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    position:relative;
+    flex-shrink:0;
+    background:var(--surface);
+    box-shadow:var(--shadow-xs);
+  }
+  .compass .tick{position:absolute; inset:0;}
+  .compass .tick::before, .compass .tick::after{
+    content:""; position:absolute; background:var(--line);
+  }
+  .compass .tick::before{top:4px; left:50%; width:1px; height:5px; transform:translateX(-50%);}
+  .compass .tick::after{bottom:4px; left:50%; width:1px; height:5px; transform:translateX(-50%);}
+  .needle{
+    position:absolute; top:50%; left:50%;
+    width:2px; height:18px;
+    background:linear-gradient(to top, var(--rust), var(--accent));
+    transform-origin:bottom center;
+    transform:translate(-50%,-100%) rotate(0deg);
+    transition:transform 1s cubic-bezier(.4,0,.2,1);
+    border-radius:2px;
+  }
+  .needle::after{
+    content:""; position:absolute; bottom:-3px; left:50%;
+    width:5px; height:5px; border-radius:50%;
+    background:var(--accent); transform:translateX(-50%);
+  }
+  .compass-label{
+    position:absolute; bottom:-18px; left:50%; transform:translateX(-50%);
+    font-family:'JetBrains Mono', monospace; font-size:8.5px; letter-spacing:.05em;
+    color:var(--ink-faint); white-space:nowrap;
+  }
+
+  /* ---------- CONTROLS ---------- */
+  .controls{padding:26px 0 4px;}
+  .locate-btn{
+    width:100%;
+    background:var(--ink);
+    color:var(--bg);
+    border:none;
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    padding:14px 16px;
+    border-radius:12px;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    box-shadow:var(--shadow-sm);
+    transition:transform .15s cubic-bezier(.2,.8,.2,1), box-shadow .15s ease;
+  }
+  .locate-btn:hover{box-shadow:var(--shadow-md); transform:translateY(-1px);}
+  .locate-btn:active{transform:translateY(0) scale(0.98); box-shadow:var(--shadow-xs);}
+  .locate-btn:disabled{opacity:.5; cursor:default; transform:none; box-shadow:var(--shadow-xs);}
+
+  .search-row{
+    display:flex; gap:8px;
+    margin-top:10px;
+  }
+  .search-row input{
+    flex:1;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px 14px;
+    font-family:'Inter', sans-serif;
+    font-size:14px;
+    color:var(--ink);
+    box-shadow:var(--shadow-xs);
+  }
+  .search-row input::placeholder{color:var(--ink-faint);}
+  .search-row input:focus{outline:none; border-color:var(--accent);}
+  .search-row button{
+    background:var(--surface);
+    border:1px solid var(--line);
+    color:var(--accent-deep);
+    font-family:'JetBrains Mono', monospace;
+    font-weight:500;
+    font-size:12.5px;
+    padding:0 16px;
+    border-radius:12px;
+    cursor:pointer;
+    white-space:nowrap;
+    box-shadow:var(--shadow-xs);
+    transition:box-shadow .15s ease, transform .1s ease;
+  }
+  .search-row button:hover{box-shadow:var(--shadow-sm);}
+  .search-row button:active{transform:scale(0.97);}
+  .search-row button:disabled{opacity:.5; cursor:default;}
+  .search-hint{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10.5px;
+    color:var(--ink-faint);
+    margin-top:8px;
+  }
+
+  .status-line{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11.5px;
+    color:var(--ink-soft);
+    text-align:center;
+    margin-top:14px;
+    min-height:16px;
+  }
+
+  .chips{
+    display:flex; gap:8px; overflow-x:auto;
+    margin-top:20px; padding-bottom:4px;
+    -ms-overflow-style:none; scrollbar-width:none;
+  }
+  .chips::-webkit-scrollbar{display:none;}
+  .chip{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11.5px;
+    letter-spacing:.03em;
+    white-space:nowrap;
+    padding:8px 14px;
+    border-radius:20px;
+    border:1px solid var(--line);
+    color:var(--ink-soft);
+    background:var(--surface);
+    cursor:pointer;
+    box-shadow:var(--shadow-xs);
+    transition:all .15s ease;
+  }
+  .chip:active{transform:scale(0.96);}
+  .chip.active{
+    background:var(--ink);
+    border-color:var(--ink);
+    color:var(--bg);
+    font-weight:500;
+    box-shadow:var(--shadow-sm);
+  }
+  .chip.pin-chip{color:var(--accent-deep);}
+  .chip.pin-chip.active{background:var(--accent); border-color:var(--accent); color:#fff;}
+
+  .surprise{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11.5px;
+    color:var(--accent-deep);
+    background:none; border:none;
+    text-decoration:underline;
+    text-underline-offset:3px;
+    cursor:pointer;
+    margin-top:16px;
+    padding:0;
+  }
+
+  /* ---------- SECTION LABEL ---------- */
+  .section-label{
+    display:flex; align-items:center; gap:10px;
+    margin:28px 0 14px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .section-label::after{content:""; flex:1; height:1px; background:var(--line);}
+
+  /* ---------- CARDS ---------- */
+  .card{
+    background:var(--surface);
+    color:var(--ink);
+    border-radius:18px;
+    margin-bottom:16px;
+    overflow:hidden;
+    box-shadow:var(--shadow-sm);
+    position:relative;
+    cursor:pointer;
+    transition:transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s cubic-bezier(.2,.8,.2,1);
+  }
+  .card:hover{transform:translateY(-4px); box-shadow:var(--shadow-lg);}
+  .card:active{transform:translateY(-1px) scale(0.99); box-shadow:var(--shadow-md);}
+
+  .card-cover{
+    position:relative;
+    width:100%;
+    aspect-ratio:16/10;
+    overflow:hidden;
+  }
+  .card-cover img{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit:cover;
+    transition:transform .5s cubic-bezier(.2,.8,.2,1);
+  }
+  .card:hover .card-cover img{transform:scale(1.07);}
+  .cover-fallback{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .cover-fallback svg{width:30%; height:30%;}
+
+  .card-pin{
+    position:absolute; top:10px; right:10px;
+    width:34px; height:34px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.9);
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; color:var(--ink-soft);
+    box-shadow:var(--shadow-sm);
+    transition:transform .15s ease;
+  }
+  .card-pin:active{transform:scale(0.88);}
+  .card-pin.pinned{color:var(--accent);}
+
+  .rating-pill{
+    position:absolute; bottom:10px; left:10px;
+    background:rgba(255,255,255,0.92);
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    border-radius:20px;
+    padding:4px 10px;
+    display:flex; align-items:center; gap:4px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px; font-weight:500;
+    box-shadow:var(--shadow-xs);
+  }
+
+  .card-body{padding:14px 16px 12px;}
+  .card-name{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:18px;
+    line-height:1.2;
+  }
+  .card-cat{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin-top:4px;
+  }
+  .card-blurb{
+    padding:10px 16px 12px;
+    font-size:13.5px;
+    line-height:1.5;
+    color:var(--ink-soft);
+  }
+  .card-hours{
+    display:flex; align-items:baseline; gap:8px;
+    padding:0 16px 12px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+  }
+  .hours-day{
+    font-size:9.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .hours-val{color:var(--ink); font-weight:500;}
+
+  .card-meta{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:11px 16px;
+    border-top:1px solid var(--line);
+    font-family:'JetBrains Mono', monospace;
+    font-size:11.5px;
+  }
+  .status-open{color:var(--good); font-weight:500;}
+  .status-closed{color:var(--rust); font-weight:500;}
+  .status-unknown{color:var(--ink-faint);}
+  .dist{color:var(--ink-soft);}
+
+  .card-actions{
+    display:flex; border-top:1px solid var(--line);
+  }
+  .card-actions a{
+    flex:1;
+    text-align:center;
+    padding:11px 0;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    color:var(--ink);
+    text-decoration:none;
+    border-right:1px solid var(--line);
+    transition:background .12s ease;
+  }
+  .card-actions a:last-child{border-right:none;}
+  .card-actions a:active{background:var(--bg);}
+
+  .empty{
+    text-align:center;
+    padding:44px 20px;
+    color:var(--ink-faint);
+    font-size:13.5px;
+    font-family:'JetBrains Mono', monospace;
+    background:var(--surface);
+    border-radius:18px;
+    box-shadow:var(--shadow-xs);
+  }
+
+  footer{
+    text-align:center;
+    margin-top:34px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:10.5px;
+    color:var(--ink-faint);
+    letter-spacing:.04em;
+  }
+  footer a{color:var(--ink-soft);}
+
+  /* ---------- LOCK SCREEN ---------- */
+  #lockScreen{
+    position:fixed; inset:0;
+    background:var(--bg);
+    display:flex; align-items:center; justify-content:center;
+    z-index:100;
+    padding:24px;
+  }
+  #lockScreen.hidden{display:none;}
+  .lock-box{width:100%; max-width:320px; text-align:center;}
+  .lock-compass{
+    width:48px; height:48px; margin:0 auto 18px;
+    border-radius:50%; border:1px solid var(--line);
+    background:var(--surface); box-shadow:var(--shadow-xs);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .lock-compass::before{
+    content:""; width:2px; height:18px;
+    background:linear-gradient(to top, var(--rust), var(--accent));
+    border-radius:2px;
+  }
+  .lock-title{font-family:'Fraunces', serif; font-weight:600; font-size:23px; margin-bottom:6px; color:var(--ink);}
+  .lock-sub{font-family:'Inter', sans-serif; font-size:13px; color:var(--ink-soft); margin-bottom:22px; line-height:1.5;}
+  .pin-input{
+    width:100%;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:14px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:20px;
+    letter-spacing:.3em;
+    text-align:center;
+    color:var(--ink);
+    margin-bottom:12px;
+    box-shadow:var(--shadow-xs);
+  }
+  .pin-input:focus{outline:none; border-color:var(--accent);}
+  .lock-btn{
+    width:100%;
+    background:var(--ink);
+    color:var(--bg);
+    border:none;
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    padding:14px;
+    border-radius:12px;
+    cursor:pointer;
+    margin-bottom:10px;
+    box-shadow:var(--shadow-sm);
+    transition:transform .12s ease;
+  }
+  .lock-btn:active{transform:scale(0.98);}
+  .lock-error{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11.5px;
+    color:var(--rust);
+    min-height:16px;
+    margin-bottom:8px;
+  }
+  .lock-reset{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10.5px;
+    color:var(--ink-faint);
+    background:none; border:none;
+    text-decoration:underline;
+    cursor:pointer;
+    margin-top:10px;
+  }
+</style>
+</head>
+<body>
+
+<div id="lockScreen">
+  <div class="lock-box">
+    <div class="lock-compass"></div>
+    <div class="lock-title" id="lockTitle">Set a PIN</div>
+    <div class="lock-sub" id="lockSub">Choose a 4+ digit PIN. It encrypts your pinned places on this device — nobody else who picks up your phone can read them without it.</div>
+    <input type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="pin-input" id="pinInput" placeholder="••••" maxlength="12">
+    <input type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="pin-input" id="pinConfirm" placeholder="confirm ••••" maxlength="12" style="display:none;">
+    <div class="lock-error" id="lockError"></div>
+    <button class="lock-btn" id="lockSubmit">Set PIN & continue</button>
+    <button class="lock-reset" id="lockReset" style="display:none;">Forgot PIN? Reset app data</button>
+  </div>
+</div>
+
+<div class="wrap" id="appContent" style="display:none;">
+
+  <div class="hero">
+    <div class="eyebrow"><span class="dot"></span>LIVE FIELD GUIDE</div>
+    <h1>What's worth<br><em>wandering to</em>?</h1>
+    <div class="hero-row">
+      <div>
+        <div class="coords" id="coordsBox">position — <span>not yet located</span></div>
+        <div class="source-note" id="sourceNote">Showing example picks near Pearland, TX</div>
+      </div>
+      <div class="compass">
+        <div class="tick"></div>
+        <div class="needle" id="needle"></div>
+        <div class="compass-label" id="compassLabel">nearest pick</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="locate-btn" id="locateBtn">📍 Find what's near me</button>
+
+    <div class="search-row">
+      <input type="text" id="locationInput" placeholder="Or search a city / address to plan ahead…">
+      <button id="searchBtn">Search</button>
+    </div>
+    <div class="search-hint">Both search and "near me" pull live spots from OpenStreetMap.</div>
+
+    <div class="status-line" id="statusLine">Uses location data only in your browser — nothing is stored on a server.</div>
+
+    <div class="chips" id="chips">
+      <button class="chip active" data-cat="all">All</button>
+      <button class="chip" data-cat="outdoors">Outdoors</button>
+      <button class="chip" data-cat="food">Food & Drink</button>
+      <button class="chip" data-cat="nightlife">Nightlife</button>
+      <button class="chip" data-cat="culture">Culture</button>
+      <button class="chip" data-cat="open">Open now</button>
+      <button class="chip pin-chip" data-cat="pinned">★ Pinned</button>
+    </div>
+    <button class="surprise" id="surpriseBtn">✦ Surprise me with something open</button>
+  </div>
+
+  <div class="section-label" id="sectionLabel">Nearby</div>
+  <div id="cardList"></div>
+
+  <footer>afield · live data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></footer>
+</div>
+
+<script>
+const SEED_PLACES = [
+  {id:"seed-1", name:"Shadow Creek Ranch Nature Trail", cat:"outdoors", lat:29.5807719, lng:-95.4165156, rating:4.6, ratingCount:391, price:null,
+   blurb:"A long shaded paved trail through Shadow Creek Ranch, with benches and a water fountain for people and dogs along the way.",
+   hours:{Mon:[360,1320],Tue:[360,1320],Wed:[360,1320],Thu:[360,1320],Fri:[360,1320],Sat:[360,1320],Sun:[360,1320]}, phone:"+1 281-412-8900", source:"seed", photo:null},
+  {id:"seed-2", name:"Delores Fenwick Nature Center", cat:"culture", lat:29.5455255, lng:-95.3087578, rating:4.7, ratingCount:86, price:null,
+   blurb:"A small city-run nature center with hands-on exhibits, baby alligators, and a walking trail looping two retention ponds thick with birds.",
+   hours:{Mon:null,Tue:[540,1020],Wed:[540,1020],Thu:[540,1020],Fri:[540,1020],Sat:[540,1020],Sun:null}, phone:"+1 281-652-1960", source:"seed", photo:null},
+  {id:"seed-3", name:"Trail at John Hargrove Environmental Complex", cat:"outdoors", lat:29.5449943, lng:-95.3088971, rating:4.7, ratingCount:78, price:null,
+   blurb:"A gravel loop trail circling two lakes, open around the clock, with restrooms and water in the nature center building near the lot.",
+   hours:{Mon:[0,1440],Tue:[0,1440],Wed:[0,1440],Thu:[0,1440],Fri:[0,1440],Sat:[0,1440],Sun:[0,1440]}, phone:"+1 281-412-8900", source:"seed", photo:null},
+  {id:"seed-4", name:"Sri Meenakshi Devasthanam", cat:"culture", lat:29.5227511, lng:-95.297626, rating:4.8, ratingCount:3247, price:null,
+   blurb:"An elaborate Hindu temple modeled on South Indian architecture, with a cafeteria, resident peacocks, and a genuinely peaceful setting.",
+   hours:{Mon:[510,780,1020,1290],Tue:[510,780,1020,1290],Wed:[510,780,1020,1290],Thu:[510,780,1020,1290],Fri:[510,780,1020,1350],Sat:[510,1350],Sun:[510,1350]}, phone:"+1 281-489-0358", source:"seed", photo:null},
+  {id:"seed-5", name:"Centennial Park", cat:"outdoors", lat:29.5509479, lng:-95.2965259, rating:4.6, ratingCount:1134, price:null,
+   blurb:"A family-friendly park with a splash pad, footbridge over a small creek, turtles and ducks, and trails connecting to a disc golf course.",
+   hours:{Mon:[360,1320],Tue:[360,1320],Wed:[360,1320],Thu:[360,1320],Fri:[360,1320],Sat:[360,1320],Sun:[360,1320]}, phone:"+1 281-412-8900", source:"seed", photo:null},
+  {id:"seed-6", name:"Harvest Moon Park", cat:"outdoors", lat:29.5468175, lng:-95.4113936, rating:null, ratingCount:null, price:null,
+   blurb:"A quiet, low-key neighborhood park — a good option when you want green space without a crowd.",
+   hours:null, phone:null, source:"seed", photo:null},
+  {id:"seed-7", name:"Clear Creek Trailhead", cat:"outdoors", lat:29.5625676, lng:-95.2563814, rating:4.6, ratingCount:52, price:null,
+   blurb:"A long paved trail good for biking or walking, mostly open with limited shade, plus a shortcut path locals use to reach a cooler lakeside spot.",
+   hours:{Mon:[0,1440],Tue:[0,1440],Wed:[0,1440],Thu:[0,1440],Fri:[0,1440],Sat:[0,1440],Sun:[0,1440]}, phone:null, source:"seed", photo:null},
+  {id:"seed-8", name:"Independence Park", cat:"outdoors", lat:29.5439321, lng:-95.2650497, rating:4.6, ratingCount:668, price:null,
+   blurb:"A recently renovated park hosting a Saturday farmers market, summer concert series, a dog park, and plenty of shaded trail.",
+   hours:{Mon:[360,1320],Tue:[360,1320],Wed:[360,1320],Thu:[360,1320],Fri:[360,1320],Sat:[360,1320],Sun:[360,1320]}, phone:"+1 281-412-8900", source:"seed", photo:null},
+  {id:"seed-9", name:"Christia V. Adair Park", cat:"outdoors", lat:29.5901721, lng:-95.3518341, rating:4.6, ratingCount:638, price:null,
+   blurb:"A creekside park with a shaded trail, outdoor workout equipment, and rentable pavilions with grills for picnics and events.",
+   hours:{Mon:[420,1140],Tue:[420,1140],Wed:[420,1140],Thu:[420,1140],Fri:[420,1140],Sat:[420,1140],Sun:[420,1140]}, phone:"+1 346-286-1805", source:"seed", photo:null},
+  {id:"seed-10", name:"Qurbah House Of Coffee", cat:"food", lat:29.5762754, lng:-95.4072346, rating:4.6, ratingCount:194, price:1,
+   blurb:"A new neighborhood coffee shop with a relaxed, welcoming vibe, indoor and outdoor seating, and a menu that stretches beyond the usual espresso drinks.",
+   hours:{Mon:[420,1380],Tue:[420,1380],Wed:[420,1380],Thu:[420,1380],Fri:[420,1440],Sat:[480,1440],Sun:[480,1380]}, phone:null, source:"seed", photo:null},
+  {id:"seed-11", name:"Cafe Petra Greek & Lebanese Restaurant", cat:"food", lat:29.5802653, lng:-95.3956234, rating:4.7, ratingCount:292, price:2,
+   blurb:"A BYOB Greek and Lebanese spot known for tender lamb shank, fresh hummus, and baklava — a genuine hidden gem by most accounts.",
+   hours:{Mon:[630,1320],Tue:[630,1320],Wed:[630,1320],Thu:[630,1380],Fri:[630,1380],Sat:[630,1380],Sun:[630,1320]}, phone:"+1 346-374-8396", source:"seed", photo:null},
+  {id:"seed-12", name:"KNP Social", cat:"nightlife", lat:29.5540864, lng:-95.4014238, rating:4.3, ratingCount:513, price:2,
+   blurb:"A lively bar and restaurant with live bands, a happy-hour menu, and a loud, family-friendly crowd on weekends.",
+   hours:{Mon:null,Tue:[960,1320],Wed:[960,1320],Thu:[960,1440],Fri:[960,1440],Sat:[660,1440],Sun:[660,1320]}, phone:"+1 832-631-6665", source:"seed", photo:null},
+  {id:"seed-13", name:"Haraz Coffee House", cat:"food", lat:29.5561056, lng:-95.3968327, rating:4.8, ratingCount:656, price:2,
+   blurb:"A Yemeni-style coffee house pouring strong Turkish and Adeni coffee alongside house-made pastries — regulars call it the best in Pearland.",
+   hours:{Mon:[420,1320],Tue:[420,1320],Wed:[420,1320],Thu:[420,1320],Fri:[420,1380],Sat:[480,1380],Sun:[480,1320]}, phone:"+1 281-741-9709", source:"seed", photo:null},
+  {id:"seed-14", name:"7Spice", cat:"food", lat:29.5578593, lng:-95.2602411, rating:4.8, ratingCount:727, price:2,
+   blurb:"A casual Cajun seafood-boil counter with generous portions and consistently attentive service.",
+   hours:{Mon:[660,1320],Tue:[660,1320],Wed:[660,1320],Thu:[660,1320],Fri:[660,1380],Sat:[660,1380],Sun:[660,1320]}, phone:"+1 346-645-7742", source:"seed", photo:null},
+  {id:"seed-15", name:"Good Vibes", cat:"food", lat:29.545035, lng:-95.225299, rating:4.5, ratingCount:1494, price:2,
+   blurb:"A beach-and-surf themed seafood spot with a big patio, cold beer, and a popular weekend brunch.",
+   hours:{Mon:[660,1260],Tue:[660,1260],Wed:[660,1260],Thu:[660,1260],Fri:[660,1320],Sat:[660,1320],Sun:[600,1260]}, phone:"+1 877-469-5073", source:"seed", photo:null},
+  {id:"seed-16", name:"Rocko's Dive Bar & Texas Kitchen", cat:"nightlife", lat:29.5422587, lng:-95.2225212, rating:4.8, ratingCount:156, price:2,
+   blurb:"A neighborhood dive with big juicy burgers, a curry ranch sauce people rave about, and an unpretentious, welcoming crowd.",
+   hours:{Mon:[960,1440],Tue:[960,1440],Wed:[960,1440],Thu:[960,120],Fri:[960,120],Sat:[960,120],Sun:[960,1440]}, phone:"+1 281-993-4626", source:"seed", photo:null},
+  {id:"seed-17", name:"Cooter Brown's Place", cat:"nightlife", lat:29.5564093, lng:-95.3313787, rating:4.4, ratingCount:118, price:1,
+   blurb:"A gritty, well-loved dive bar with pool, darts, karaoke, and smoking allowed indoors — no liquor, but nobody seems to mind.",
+   hours:{Mon:[720,120],Tue:[720,120],Wed:[720,120],Thu:[720,120],Fri:[720,120],Sat:[720,120],Sun:[720,120]}, phone:"+1 281-412-0077", source:"seed", photo:null},
+  {id:"seed-18", name:"Two Dogs Saloon", cat:"nightlife", lat:29.5588889, lng:-95.2855556, rating:4.4, ratingCount:163, price:1,
+   blurb:"A non-smoking saloon with live music, karaoke, pool, and a small patio — a longtime local favorite.",
+   hours:{Mon:[840,90],Tue:[840,90],Wed:[840,90],Thu:[840,90],Fri:[720,120],Sat:[720,120],Sun:[720,90]}, phone:"+1 832-606-9189", source:"seed", photo:null},
+  {id:"seed-19", name:"Twisted Sisters", cat:"nightlife", lat:29.5011323, lng:-95.3429842, rating:4.8, ratingCount:47, price:1,
+   blurb:"A smoke-free neighborhood bar with a jukebox, ladies' night, bingo, and karaoke — small, clean, and reliably friendly.",
+   hours:{Mon:[720,1440],Tue:[720,1440],Wed:[720,1440],Thu:[720,1440],Fri:[720,1440],Sat:[720,60],Sun:[780,1320]}, phone:"+1 832-336-4486", source:"seed", photo:null},
+  {id:"seed-20", name:"Lou's Back Porch Bar", cat:"nightlife", lat:29.5132735, lng:-95.4584221, rating:4.3, ratingCount:89, price:1,
+   blurb:"A family-feel neighborhood bar with pool, shuffleboard, darts, and game consoles — bring your own liquor if beer isn't your thing.",
+   hours:{Mon:[720,120],Tue:[720,120],Wed:[720,120],Thu:[720,120],Fri:[660,120],Sat:[660,120],Sun:[720,120]}, phone:"+1 281-431-9146", source:"seed", photo:null}
+];
+
+const CAT_LABEL = {outdoors:"Outdoors", food:"Food & Drink", nightlife:"Nightlife", culture:"Culture"};
+
+/* ---------- cover art: real photo when we have one, otherwise a
+   category tile that never breaks or shows a blank box ---------- */
+const COVER_ART = {
+  outdoors: {grad:"linear-gradient(135deg,#DFEDE9,#BCD6D0)", icon:'<path d="M3 18 L9 8 L13 14 L16 9 L21 18 Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="17" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'},
+  food: {grad:"linear-gradient(135deg,#E4EBF2,#C4D4E2)", icon:'<rect x="5" y="8" width="11" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M16 10.5h2a2 2 0 0 1 0 4h-2" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="5" y1="20" x2="16" y2="20" stroke="currentColor" stroke-width="1.4"/>'},
+  nightlife: {grad:"linear-gradient(135deg,#E3E2F0,#C2C1DE)", icon:'<path d="M6 4h12l-1.3 7.6a4.7 4.7 0 0 1-9.4 0L6 4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><line x1="12" y1="15.6" x2="12" y2="20" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="20" x2="16" y2="20" stroke="currentColor" stroke-width="1.4"/>'},
+  culture: {grad:"linear-gradient(135deg,#DCE6EC,#B4CAD8)", icon:'<path d="M12 3l7 5H5l7-5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><rect x="5" y="9" width="14" height="9" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="3" y1="20" x2="21" y2="20" stroke="currentColor" stroke-width="1.4"/>'}
+};
+function coverFor(p){
+  const art = COVER_ART[p.cat] || COVER_ART.outdoors;
+  const fallback = `<div class="cover-fallback" style="color:rgba(20,26,31,0.32)"><svg viewBox="0 0 24 24">${art.icon}</svg></div>`;
+  const img = p.photo ? `<img src="${p.photo}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();">` : "";
+  return `<div class="card-cover" style="background:${art.grad}">${fallback}${img}</div>`;
+}
+
+let userLoc = null;
+let activePlaces = SEED_PLACES;
+let activeCat = "all";
+let pinnedIds = new Set();
+let pinnedStore = {}; // id -> full place object, so pinned view survives dataset changes
+
+/* ---------- geometry ---------- */
+function haversine(lat1, lon1, lat2, lon2){
+  const R = 3958.8;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLon = (lon2-lon1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function bearing(lat1, lon1, lat2, lon2){
+  const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180, Δλ=(lon2-lon1)*Math.PI/180;
+  const y = Math.sin(Δλ)*Math.cos(φ2);
+  const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+  return (Math.atan2(y,x)*180/Math.PI + 360) % 360;
+}
+function fmtDist(mi){
+  if(mi < 0.1) return "steps away";
+  if(mi < 10) return mi.toFixed(1) + " mi";
+  return Math.round(mi) + " mi";
+}
+
+/* ---------- hours ---------- */
+function dayKey(d){ return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]; }
+function openStatus(hours){
+  if(!hours) return {open:null, text:"hours unknown"};
+  const now = new Date();
+  const todayKey = dayKey(now.getDay());
+  const mins = now.getHours()*60 + now.getMinutes();
+  const todayRanges = hours[todayKey];
+  if(!todayRanges) return {open:false, text:"closed today"};
+  for(let i=0;i<todayRanges.length;i+=2){
+    let open = todayRanges[i], close = todayRanges[i+1];
+    if(close < open){
+      if(mins >= open || mins < close) return {open:true, text:"open now"};
+    } else {
+      if(mins >= open && mins < close) return {open:true, text:"open now"};
+    }
+  }
+  return {open:false, text:"closed now"};
+}
+
+/* ---------- readable hours for the card ---------- */
+function fmtClock(mins){
+  const m = ((mins % 1440) + 1440) % 1440;
+  let h = Math.floor(m / 60);
+  const mm = m % 60;
+  const suffix = h >= 12 ? 'p' : 'a';
+  h = h % 12; if(h === 0) h = 12;
+  return mm === 0 ? `${h}${suffix}` : `${h}:${String(mm).padStart(2,'0')}${suffix}`;
+}
+function todayHoursText(hours){
+  if(!hours) return null;
+  const ranges = hours[dayKey(new Date().getDay())];
+  if(!ranges) return "Closed today";
+  const parts = [];
+  for(let i = 0; i < ranges.length; i += 2){
+    const open = ranges[i], close = ranges[i+1];
+    if(open === 0 && close === 1440) return "Open 24 hours";
+    parts.push(`${fmtClock(open)}–${fmtClock(close)}`);
+  }
+  return parts.length ? parts.join(', ') : null;
+}
+
+/* ---------- OSM opening_hours parser (best-effort) ---------- */
+function toMin(t){ const p=t.split(':').map(Number); return p[0]*60+(p[1]||0); }
+function expandDays(part, order){
+  let out=[];
+  part.split(',').forEach(seg=>{
+    if(seg.includes('-')){
+      const [a,b]=seg.split('-');
+      let ai=order.indexOf(a), bi=order.indexOf(b);
+      if(ai===-1||bi===-1) return;
+      if(ai<=bi){ for(let i=ai;i<=bi;i++) out.push(order[i]); }
+      else { for(let i=ai;i<order.length;i++) out.push(order[i]); for(let i=0;i<=bi;i++) out.push(order[i]); }
+    } else if(order.includes(seg)){ out.push(seg); }
+  });
+  return out;
+}
+function parseOsmHours(str){
+  if(!str) return null;
+  try{
+    if(str.trim()==="24/7"){
+      const all=[0,1440];
+      return {Mon:all,Tue:all,Wed:all,Thu:all,Fri:all,Sat:all,Sun:all};
+    }
+    const dayMap={Mo:'Mon',Tu:'Tue',We:'Wed',Th:'Thu',Fr:'Fri',Sa:'Sat',Su:'Sun'};
+    const order=['Mo','Tu','We','Th','Fr','Sa','Su'];
+    const result={};
+    str.split(';').map(r=>r.trim()).filter(Boolean).forEach(rule=>{
+      const m = rule.match(/^([A-Za-z,\-]+)\s+([0-9:,\-]+)$/);
+      if(!m) return;
+      const days = expandDays(m[1], order);
+      const ranges = m[2].split(',').map(t=>t.trim()).flatMap(t=>{
+        const [s,e]=t.split('-'); return [toMin(s), toMin(e)];
+      });
+      days.forEach(d=>{
+        const key=dayMap[d];
+        result[key] = (result[key]||[]).concat(ranges);
+      });
+    });
+    return Object.keys(result).length ? result : null;
+  }catch(e){ return null; }
+}
+
+/* ---------- live data (OpenStreetMap) ---------- */
+function classifyTags(tags){
+  if(tags.amenity==='cafe'||tags.amenity==='restaurant'||tags.amenity==='fast_food') return 'food';
+  if(tags.amenity==='bar'||tags.amenity==='pub'||tags.amenity==='nightclub') return 'nightlife';
+  if(tags.tourism==='museum'||tags.tourism==='attraction'||tags.amenity==='place_of_worship') return 'culture';
+  return 'outdoors';
+}
+function describeTags(tags){
+  const bits=[];
+  if(tags.cuisine) bits.push(tags.cuisine.replace(/_/g,' ')+" cuisine");
+  if(tags.amenity) bits.push(tags.amenity.replace(/_/g,' '));
+  if(tags.tourism) bits.push(tags.tourism.replace(/_/g,' '));
+  if(tags.leisure) bits.push(tags.leisure.replace(/_/g,' '));
+  if(tags.natural) bits.push(tags.natural.replace(/_/g,' '));
+  return bits.length ? ("Listed as " + bits.join(', ') + " on OpenStreetMap.") : "Community-mapped spot on OpenStreetMap.";
+}
+function photoFor(tags){
+  // Only ever use openly-licensed, directly-hotlinkable sources so images
+  // never depend on a key or break due to hotlink protection.
+  if(tags.image && /^https?:\/\//.test(tags.image)) return tags.image;
+  if(tags.wikimedia_commons){
+    const file = tags.wikimedia_commons.replace(/^File:/i, '');
+    return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=500`;
+  }
+  return null;
+}
+function withTimeout(promise, ms){
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return {signal: ctrl.signal, clear: () => clearTimeout(timer)};
+}
+
+const OVERPASS_MIRRORS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.openstreetmap.ru/api/interpreter"
+];
+
+async function fetchLivePlaces(lat, lon){
+  const query = `[out:json][timeout:25];(
+    node["leisure"="park"](around:6000,${lat},${lon});
+    node["tourism"="viewpoint"](around:9000,${lat},${lon});
+    node["natural"="beach"](around:12000,${lat},${lon});
+    node["amenity"="cafe"](around:4000,${lat},${lon});
+    node["amenity"="restaurant"](around:4000,${lat},${lon});
+    node["amenity"="bar"](around:4000,${lat},${lon});
+    node["amenity"="pub"](around:4000,${lat},${lon});
+    node["amenity"="nightclub"](around:5000,${lat},${lon});
+    node["tourism"="museum"](around:9000,${lat},${lon});
+    node["tourism"="attraction"](around:9000,${lat},${lon});
+    node["amenity"="place_of_worship"](around:6000,${lat},${lon});
+  );out body 80;`;
+
+  let lastErr;
+  for(const endpoint of OVERPASS_MIRRORS){
+    const t = withTimeout(null, 12000);
+    try{
+      const resp = await fetch(endpoint, {method:"POST", body:query, signal:t.signal});
+      t.clear();
+      if(!resp.ok) throw new Error(`${endpoint} responded ${resp.status}`);
+      const data = await resp.json();
+      const seen = new Set();
+      return data.elements
+        .filter(el => el.tags && el.tags.name && el.lat && el.lon)
+        .filter(el => { if(seen.has(el.tags.name)) return false; seen.add(el.tags.name); return true; })
+        .map(el => ({
+          id: 'osm-'+el.id,
+          name: el.tags.name,
+          cat: classifyTags(el.tags),
+          lat: el.lat, lng: el.lon,
+          rating: null, ratingCount: null, price: null,
+          blurb: describeTags(el.tags),
+          hours: parseOsmHours(el.tags.opening_hours),
+          phone: el.tags.phone || el.tags["contact:phone"] || null,
+          photo: photoFor(el.tags),
+          source: "osm"
+        }));
+    }catch(err){
+      t.clear();
+      console.warn(`Overpass mirror failed (${endpoint}):`, err);
+      lastErr = err;
+    }
+  }
+  throw new Error(`all Overpass mirrors failed (${lastErr ? lastErr.message : 'unknown error'})`);
+}
+
+// Nominatim's usage policy caps clients at 1 request/second. Enforce it here
+// so rapid searches queue instead of getting the IP blocked.
+let lastGeocodeAt = 0;
+async function geocode(query){
+  const wait = 1100 - (Date.now() - lastGeocodeAt);
+  if(wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastGeocodeAt = Date.now();
+
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
+  const t = withTimeout(null, 10000);
+  let resp;
+  try{
+    resp = await fetch(url, {signal:t.signal, headers:{"Accept":"application/json"}});
+  }catch(err){
+    throw new Error(`could not reach Nominatim (${err.message})`);
+  }finally{
+    t.clear();
+  }
+  if(!resp.ok) throw new Error(`Nominatim responded ${resp.status}`);
+  const data = await resp.json();
+  if(data.length===0) return null;
+  return {lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), label: data[0].display_name.split(',').slice(0,3).join(',')};
+}
+
+/* ---------- pinning: PIN-derived AES-GCM vault in localStorage ----------
+   Nothing leaves the device. The PIN never touches disk — only a salt and
+   an encrypted blob are stored. A wrong PIN fails to decrypt (AES-GCM's
+   built-in auth check), which doubles as the unlock check. */
+const SALT_KEY = 'afield-salt';
+const VAULT_KEY = 'afield-vault';
+let cryptoKey = null;
+
+function b64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function unb64(str){ return Uint8Array.from(atob(str), c => c.charCodeAt(0)); }
+
+async function deriveKey(pin, saltBytes){
+  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt:saltBytes, iterations:150000, hash:'SHA-256'},
+    material,
+    {name:'AES-GCM', length:256},
+    false,
+    ['encrypt','decrypt']
+  );
+}
+async function vaultEncrypt(key, obj){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = new TextEncoder().encode(JSON.stringify(obj));
+  const cipher = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, data);
+  return {iv:b64(iv), data:b64(cipher)};
+}
+async function vaultDecrypt(key, payload){
+  const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(payload.iv)}, key, unb64(payload.data));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+async function savePins(){
+  if(!cryptoKey) return;
+  try{
+    const payload = await vaultEncrypt(cryptoKey, pinnedStore);
+    localStorage.setItem(VAULT_KEY, JSON.stringify(payload));
+  }catch(e){ console.error('Could not save pins', e); }
+}
+function togglePin(place){
+  if(pinnedIds.has(place.id)){
+    pinnedIds.delete(place.id);
+    delete pinnedStore[place.id];
+  } else {
+    pinnedIds.add(place.id);
+    // Drop the transient distance field so stale mileage isn't persisted.
+    const {_dist, ...clean} = place;
+    pinnedStore[place.id] = clean;
+  }
+  savePins();
+  render();
+}
+
+/* ---------- lock screen ---------- */
+const lockScreen = document.getElementById('lockScreen');
+const appContent = document.getElementById('appContent');
+const pinInput = document.getElementById('pinInput');
+const pinConfirm = document.getElementById('pinConfirm');
+const lockError = document.getElementById('lockError');
+const lockTitle = document.getElementById('lockTitle');
+const lockSub = document.getElementById('lockSub');
+const lockSubmit = document.getElementById('lockSubmit');
+const lockReset = document.getElementById('lockReset');
+
+function hasVault(){ return !!localStorage.getItem(VAULT_KEY); }
+
+function showLockUI(){
+  lockScreen.classList.remove('hidden');
+  appContent.style.display = 'none';
+  lockError.textContent = '';
+  pinInput.value = '';
+  cryptoKey = null;
+  if(hasVault()){
+    lockTitle.textContent = 'Enter PIN';
+    lockSub.textContent = 'Unlock to see your pinned places.';
+    pinConfirm.style.display = 'none';
+    lockSubmit.textContent = 'Unlock';
+    lockReset.style.display = 'block';
+  } else {
+    lockTitle.textContent = 'Set a PIN';
+    lockSub.textContent = "Choose a 4+ digit PIN. It encrypts your pinned places on this device — nobody else who picks up your phone can read them without it.";
+    pinConfirm.style.display = 'block';
+    pinConfirm.value = '';
+    lockSubmit.textContent = 'Set PIN & continue';
+    lockReset.style.display = 'none';
+  }
+  setTimeout(() => pinInput.focus(), 50);
+}
+
+async function unlockApp(){
+  cryptoKey = null;
+  const stored = localStorage.getItem(VAULT_KEY);
+  const salt = unb64(localStorage.getItem(SALT_KEY));
+  const key = await deriveKey(pinInput.value, salt);
+  try{
+    pinnedStore = await vaultDecrypt(key, JSON.parse(stored));
+    pinnedIds = new Set(Object.keys(pinnedStore));
+    cryptoKey = key;
+    lockScreen.classList.add('hidden');
+    appContent.style.display = '';
+    render();
+  }catch(e){
+    lockError.textContent = 'Incorrect PIN.';
+    pinInput.value = '';
+    pinInput.focus();
+  }
+}
+
+async function setPin(){
+  const pin = pinInput.value.trim();
+  const confirmVal = pinConfirm.value.trim();
+  if(pin.length < 4){ lockError.textContent = 'Use at least 4 digits.'; return; }
+  if(pin !== confirmVal){ lockError.textContent = "PINs don't match."; return; }
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  localStorage.setItem(SALT_KEY, b64(salt));
+  const key = await deriveKey(pin, salt);
+  pinnedStore = {};
+  pinnedIds = new Set();
+  cryptoKey = key;
+  const payload = await vaultEncrypt(key, pinnedStore);
+  localStorage.setItem(VAULT_KEY, JSON.stringify(payload));
+  lockScreen.classList.add('hidden');
+  appContent.style.display = '';
+  render();
+}
+
+lockSubmit.addEventListener('click', () => {
+  lockError.textContent = '';
+  if(hasVault()) unlockApp(); else setPin();
+});
+pinInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') lockSubmit.click(); });
+pinConfirm.addEventListener('keydown', (e) => { if(e.key === 'Enter') lockSubmit.click(); });
+
+lockReset.addEventListener('click', () => {
+  if(confirm('This permanently deletes your pinned places on this device and cannot be undone. Reset?')){
+    localStorage.removeItem(VAULT_KEY);
+    localStorage.removeItem(SALT_KEY);
+    showLockUI();
+  }
+});
+
+// Re-lock whenever the app is backgrounded — but not when the user is
+// intentionally handing off to Apple Maps or the dialer, which would
+// otherwise demand a PIN every time they came back from directions.
+let handingOff = false;
+function markHandoff(){
+  handingOff = true;
+  setTimeout(() => { handingOff = false; }, 4000);
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden && cryptoKey && !handingOff){
+    showLockUI();
+  }
+});
+
+/* ---------- rendering ---------- */
+function render(){
+  const list = document.getElementById("cardList");
+  const label = document.getElementById("sectionLabel");
+  let items;
+
+  if(activeCat === "pinned"){
+    items = Object.values(pinnedStore);
+    label.textContent = "Pinned places";
+  } else {
+    items = activePlaces.slice();
+    if(activeCat === "open"){
+      items = items.filter(p => openStatus(p.hours).open === true);
+    } else if(activeCat !== "all"){
+      items = items.filter(p => p.cat === activeCat);
+    }
+  }
+
+  if(userLoc){
+    items.forEach(p => p._dist = haversine(userLoc.lat, userLoc.lng, p.lat, p.lng));
+    items.sort((a,b) => a._dist - b._dist);
+    if(activeCat !== "pinned"){
+      label.textContent = activeCat === "all" ? "Nearby, closest first" : (CAT_LABEL[activeCat] || "Open now") + ", closest first";
+    }
+  } else if(activeCat !== "pinned"){
+    items.sort((a,b) => (b.rating||0) - (a.rating||0));
+    label.textContent = activeCat === "all" ? "Highest rated" : (CAT_LABEL[activeCat] || "Open now") + " · highest rated";
+  }
+
+  if(items.length === 0){
+    const msg = activeCat === "pinned" ? "Nothing pinned yet — tap the ☆ on any place to save it here." : "Nothing in this category right now — try another filter.";
+    list.innerHTML = `<div class="empty">${msg}</div>`;
+    updateCompass([]);
+    return;
+  }
+
+  list.innerHTML = items.map(p => {
+    const status = openStatus(p.hours);
+    const statusClass = status.open === true ? "status-open" : status.open === false ? "status-closed" : "status-unknown";
+    const distHtml = userLoc ? `<span class="dist">${fmtDist(p._dist)}</span>` : "";
+    const ratingHtml = p.rating ? `<div class="rating-pill">★ ${p.rating}</div>` : "";
+    const hrs = todayHoursText(p.hours);
+    const hoursHtml = hrs ? `<div class="card-hours"><span class="hours-day">Today</span><span class="hours-val">${hrs}</span></div>` : "";
+    // Apple Maps: q= labels the pin, ll= drops it at the exact coordinates.
+    const mapUrl = `https://maps.apple.com/?q=${encodeURIComponent(p.name)}&ll=${p.lat},${p.lng}`;
+    const callHtml = p.phone ? `<a href="tel:${p.phone.replace(/\s/g,'')}">Call</a>` : "";
+    const isPinned = pinnedIds.has(p.id);
+    return `
+      <div class="card" data-map="${mapUrl}">
+        <div style="position:relative;">
+          ${coverFor(p)}
+          <button class="card-pin ${isPinned?'pinned':''}" data-id="${p.id}" title="Pin this place">${isPinned ? '★' : '☆'}</button>
+          ${ratingHtml}
+        </div>
+        <div class="card-body">
+          <div class="card-name">${p.name}</div>
+          <div class="card-cat">${CAT_LABEL[p.cat] || p.cat}${p.source==='osm' && !p.rating ? ' · OSM' : ''}</div>
+        </div>
+        <div class="card-blurb">${p.blurb}</div>
+        ${hoursHtml}
+        <div class="card-meta">
+          <span class="${statusClass}">${status.text}</span>
+          ${distHtml}
+        </div>
+        <div class="card-actions">
+          <a href="${mapUrl}" rel="noopener">Directions</a>
+          ${callHtml}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  list.querySelectorAll(".card-pin").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const place = items.find(p => p.id === id) || pinnedStore[id];
+      if(place) togglePin(place);
+    });
+  });
+
+  // Tapping anywhere on the card opens it in Apple Maps —
+  // except the pin button and the action links, which do their own thing.
+  list.querySelectorAll(".card").forEach(card => {
+    card.addEventListener("click", (e) => {
+      if(e.target.closest(".card-pin")) return;
+      markHandoff();
+      if(e.target.closest("a")) return;
+      window.location.href = card.dataset.map;
+    });
+  });
+
+  updateCompass(items);
+}
+
+function updateCompass(items){
+  const needle = document.getElementById("needle");
+  const compassLabel = document.getElementById("compassLabel");
+  if(!userLoc || items.length === 0){
+    compassLabel.textContent = userLoc ? "no matches" : "no fix yet";
+    return;
+  }
+  const nearestOpen = items.find(p => openStatus(p.hours).open !== false) || items[0];
+  const brg = bearing(userLoc.lat, userLoc.lng, nearestOpen.lat, nearestOpen.lng);
+  needle.style.transform = `translate(-50%,-100%) rotate(${brg}deg)`;
+  compassLabel.textContent = nearestOpen.name.length > 22 ? nearestOpen.name.slice(0,20) + "…" : nearestOpen.name;
+}
+
+/* ---------- controls ---------- */
+document.getElementById("locateBtn").addEventListener("click", () => {
+  const btn = document.getElementById("locateBtn");
+  const statusLine = document.getElementById("statusLine");
+  if(!navigator.geolocation){
+    statusLine.textContent = "Geolocation isn't available here. If you opened this as a local file, it needs to be served over https.";
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "Locating…";
+  statusLine.textContent = "Waiting on your device's GPS…";
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      userLoc = {lat:pos.coords.latitude, lng:pos.coords.longitude};
+      document.getElementById("coordsBox").innerHTML = `position — <span>${userLoc.lat.toFixed(4)}, ${userLoc.lng.toFixed(4)}</span>`;
+      btn.textContent = "📍 Re-check my location";
+      statusLine.textContent = "Located. Fetching what's around you…";
+      render();
+
+      try{
+        const livePlaces = await fetchLivePlaces(userLoc.lat, userLoc.lng);
+        activePlaces = livePlaces;
+        document.getElementById("sourceNote").textContent = "Showing mapped spots around you";
+        statusLine.textContent = livePlaces.length
+          ? `Found ${livePlaces.length} spots near you.`
+          : "Nothing mapped nearby — try searching a larger town.";
+      }catch(err){
+        console.error("Overpass error:", err);
+        // Network down or Overpass unreachable: fall back to the built-in set
+        // rather than showing an empty screen, but say so plainly.
+        activePlaces = SEED_PLACES;
+        document.getElementById("sourceNote").textContent = "Offline — showing built-in Pearland picks";
+        statusLine.textContent = `Couldn't reach the map service (${err.message}). Showing saved picks instead.`;
+      }
+      btn.disabled = false;
+      render();
+    },
+    (err) => {
+      btn.textContent = "📍 Find what's near me";
+      btn.disabled = false;
+      statusLine.textContent = `Couldn't get your location: ${err.message}`;
+    },
+    {enableHighAccuracy:true, timeout:10000}
+  );
+});
+
+document.getElementById("searchBtn").addEventListener("click", runSearch);
+document.getElementById("locationInput").addEventListener("keydown", (e) => {
+  if(e.key === "Enter") runSearch();
+});
+
+async function runSearch(){
+  const input = document.getElementById("locationInput");
+  const btn = document.getElementById("searchBtn");
+  const statusLine = document.getElementById("statusLine");
+  const query = input.value.trim();
+  if(!query) return;
+
+  btn.disabled = true;
+  btn.textContent = "…";
+  statusLine.textContent = `Looking up "${query}"…`;
+
+  try{
+    let place;
+    try{
+      place = await geocode(query);
+    }catch(geoErr){
+      console.error("Geocode error:", geoErr);
+      statusLine.textContent = `Location lookup failed: ${geoErr.message}. (See browser console for details.)`;
+      btn.disabled = false; btn.textContent = "Search";
+      return;
+    }
+    if(!place){
+      statusLine.textContent = `Couldn't find "${query}" — try a more specific place.`;
+      btn.disabled = false; btn.textContent = "Search";
+      return;
+    }
+    userLoc = {lat: place.lat, lng: place.lng};
+    document.getElementById("coordsBox").innerHTML = `position — <span>${userLoc.lat.toFixed(4)}, ${userLoc.lng.toFixed(4)}</span>`;
+    document.getElementById("sourceNote").textContent = `Showing community-mapped spots near ${place.label}`;
+    statusLine.textContent = "Fetching nearby spots…";
+
+    try{
+      const livePlaces = await fetchLivePlaces(place.lat, place.lng);
+      activePlaces = livePlaces;
+      statusLine.textContent = livePlaces.length
+        ? `Found ${livePlaces.length} mapped spots near ${place.label}.`
+        : `No mapped spots turned up near ${place.label} — try a nearby city.`;
+      render();
+    }catch(fetchErr){
+      console.error("Overpass error:", fetchErr);
+      statusLine.textContent = `Found "${place.label}" but couldn't load nearby spots: ${fetchErr.message}. (See browser console for details.)`;
+    }
+  }catch(e){
+    console.error("Search error:", e);
+    statusLine.textContent = `Search failed: ${e.message}. (See browser console for details.)`;
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Search";
+  }
+}
+
+document.getElementById("chips").addEventListener("click", (e) => {
+  const chip = e.target.closest(".chip");
+  if(!chip) return;
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+  chip.classList.add("active");
+  activeCat = chip.dataset.cat;
+  render();
+});
+
+document.getElementById("surpriseBtn").addEventListener("click", () => {
+  const pool = activePlaces.filter(p => openStatus(p.hours).open === true);
+  const source = pool.length ? pool : activePlaces;
+  const pick = source[Math.floor(Math.random() * source.length)];
+  alert(`✦ Go here: ${pick.name}\n\n${pick.blurb}`);
+});
+
+showLockUI();
+</script>
+</body>
+</html>
