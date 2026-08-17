@@ -27,6 +27,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Afield">
 <meta name="theme-color" content="#F2F5F7">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta name="afield-version" content="2026.08.17">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23141A1F'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23F2F5F7' stroke-width='2'/%3E%3Cpath d='M50 28 L58 50 L50 72 L42 50 Z' fill='%232E7D93'/%3E%3C/svg%3E">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -109,6 +111,10 @@
   .hero-head{
     display:flex; align-items:center; justify-content:space-between; gap:12px;
   }
+  .head-btns{display:flex; gap:6px; align-items:center; flex-shrink:0;}
+  .theme-btn.on{color:var(--accent); border-color:var(--accent);}
+  .theme-btn:disabled{opacity:.4; cursor:default;}
+
   .theme-btn{
     width:34px; height:34px;
     border-radius:50%;
@@ -870,7 +876,10 @@
   <div class="hero">
     <div class="hero-head">
       <div class="eyebrow"><span class="dot"></span>LIVE FIELD GUIDE</div>
-      <button class="theme-btn" id="themeBtn" title="Switch theme" aria-label="Switch theme"></button>
+      <div class="head-btns">
+        <button class="theme-btn" id="bioToggle" title="Face ID" aria-label="Face ID" style="display:none;">☺</button>
+        <button class="theme-btn" id="themeBtn" title="Switch theme" aria-label="Switch theme"></button>
+      </div>
     </div>
     <h1>What's worth<br><em>wandering to</em>?</h1>
     <div class="hero-row">
@@ -1734,7 +1743,14 @@ async function unlockWithBio(){
   const prfBytes = await readPRF(rec.credId, unb64(rec.prfSalt));
   const bioKey = await deriveFromPRF(prfBytes);
   dek = await unwrapDEK(bioKey, {iv:rec.iv, data:rec.data});
-  unpackVault(await decryptWith(dek, readJSON(VAULT_KEY)));
+  try{
+    unpackVault(await decryptWith(dek, readJSON(VAULT_KEY)));
+  }catch(e){
+    // Wrapper points at an old key — clear it so the toggle offers re-enrol.
+    localStorage.removeItem(WRAP_BIO);
+    dek = null;
+    throw new Error('Face ID setup is out of date — unlock with your PIN and re-enable it.');
+  }
 }
 
 /* ---------- lock screen ---------- */
@@ -1748,6 +1764,7 @@ const lockSub = document.getElementById('lockSub');
 const lockSubmit = document.getElementById('lockSubmit');
 const lockReset = document.getElementById('lockReset');
 const bioBtn = document.getElementById('bioBtn');
+const bioToggle = document.getElementById('bioToggle');
 const bioOffer = document.getElementById('bioOffer');
 const bioEnable = document.getElementById('bioEnable');
 const bioDismiss = document.getElementById('bioDismiss');
@@ -1761,7 +1778,19 @@ function enterApp(){
   maybeOfferBio();
 }
 
+// The toggle is the single source of truth for Face ID; the banner is only a
+// first-run nudge. Dismissing the banner must never strand the feature.
+async function refreshBioUI(){
+  const supported = await bioAvailable();
+  bioToggle.style.display = supported ? 'flex' : 'none';
+  if(!supported) return;
+  const on = bioEnrolled();
+  bioToggle.textContent = on ? '☺' : '☹';
+  bioToggle.classList.toggle('on', on);
+  bioToggle.title = on ? 'Face ID is on — tap to turn off' : 'Face ID is off — tap to enable';
+}
 async function maybeOfferBio(){
+  await refreshBioUI();
   const dismissed = localStorage.getItem('afield-bio-dismissed');
   if(bioEnrolled() || dismissed || !(await bioAvailable())) return;
   bioOffer.style.display = 'flex';
@@ -1848,6 +1877,9 @@ async function writePinWrap(pin){
 }
 
 async function migrateToEnvelope(pin){
+  // A new DEK orphans any existing passkey wrapper, so drop it and let the
+  // user re-enable rather than leaving a wrapper that silently won't work.
+  localStorage.removeItem(WRAP_BIO);
   dek = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
   await writePinWrap(pin);
   localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, vaultPayload())));
@@ -1862,6 +1894,8 @@ async function setPin(){
   pinnedStore = {};
   pinnedIds = new Set();
   dayPlan = emptyPlan();
+  myMarks = {};
+  localStorage.removeItem(WRAP_BIO);
   dek = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
   await writePinWrap(pin);
   localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, vaultPayload())));
@@ -1876,11 +1910,34 @@ bioBtn.addEventListener('click', () => tryBio(false));
 pinInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') lockSubmit.click(); });
 pinConfirm.addEventListener('keydown', (e) => { if(e.key === 'Enter') lockSubmit.click(); });
 
+async function turnBioOn(){
+  await enrolBio();
+  await refreshBioUI();
+}
+bioToggle.addEventListener('click', async () => {
+  if(bioEnrolled()){
+    if(!confirm('Turn off Face ID unlock? Your PIN will still work, and your saved places are untouched.')) return;
+    localStorage.removeItem(WRAP_BIO);
+    await refreshBioUI();
+    return;
+  }
+  bioToggle.disabled = true;
+  try{
+    await turnBioOn();
+    bioOffer.style.display = 'none';
+  }catch(e){
+    console.warn('Face ID setup failed:', e);
+    alert(e.message || 'Could not set up Face ID on this device.');
+  }finally{
+    bioToggle.disabled = false;
+  }
+});
+
 bioEnable.addEventListener('click', async () => {
   bioEnable.disabled = true;
   bioEnable.textContent = 'Waiting…';
   try{
-    await enrolBio();
+    await turnBioOn();
     bioOffer.innerHTML = '<span class="bio-done">✓ Face ID enabled. Your PIN still works as a backup.</span>';
     setTimeout(() => { bioOffer.style.display = 'none'; }, 3500);
   }catch(e){
