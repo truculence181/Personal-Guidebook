@@ -538,6 +538,52 @@
     min-height:16px;
     margin-bottom:8px;
   }
+  .bio-btn{
+    width:100%;
+    background:var(--surface);
+    color:var(--accent-deep);
+    border:1px solid var(--line);
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size:14px;
+    padding:13px;
+    border-radius:12px;
+    cursor:pointer;
+    margin-bottom:10px;
+    box-shadow:var(--shadow-xs);
+    transition:transform .12s ease, box-shadow .15s ease;
+  }
+  .bio-btn:hover{box-shadow:var(--shadow-sm);}
+  .bio-btn:active{transform:scale(0.98);}
+  .bio-btn:disabled{opacity:.5; cursor:default;}
+
+  .bio-offer{
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px 16px;
+    margin-top:20px;
+    box-shadow:var(--shadow-sm);
+  }
+  .bio-copy{display:flex; flex-direction:column; gap:3px; flex:1; min-width:180px;}
+  .bio-copy strong{font-size:14px; font-weight:600; color:var(--ink);}
+  .bio-copy span{font-size:12.5px; color:var(--ink-soft); line-height:1.45;}
+  .bio-actions{display:flex; gap:8px;}
+  .bio-actions button{
+    font-family:'Inter', sans-serif;
+    font-size:13px; font-weight:600;
+    padding:9px 14px;
+    border-radius:10px;
+    border:none;
+    background:var(--ink); color:var(--bg);
+    cursor:pointer;
+  }
+  .bio-actions button:active{transform:scale(0.97);}
+  .bio-actions button:disabled{opacity:.5; cursor:default;}
+  .bio-actions .ghost{background:transparent; color:var(--ink-soft); border:1px solid var(--line);}
+  .bio-done{font-size:13px; color:var(--good); font-weight:500;}
+
   .lock-reset{
     font-family:'JetBrains Mono', monospace;
     font-size:10.5px;
@@ -560,11 +606,23 @@
     <input type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="pin-input" id="pinConfirm" placeholder="confirm ••••" maxlength="12" style="display:none;">
     <div class="lock-error" id="lockError"></div>
     <button class="lock-btn" id="lockSubmit">Set PIN & continue</button>
+    <button class="bio-btn" id="bioBtn" style="display:none;">Unlock with Face ID</button>
     <button class="lock-reset" id="lockReset" style="display:none;">Forgot PIN? Reset app data</button>
   </div>
 </div>
 
 <div class="wrap" id="appContent" style="display:none;">
+
+  <div class="bio-offer" id="bioOffer" style="display:none;">
+    <div class="bio-copy">
+      <strong>Skip the PIN next time</strong>
+      <span id="bioMsg">Use Face ID to unlock. Your PIN stays as a backup.</span>
+    </div>
+    <div class="bio-actions">
+      <button id="bioEnable">Enable</button>
+      <button id="bioDismiss" class="ghost">Not now</button>
+    </div>
+  </div>
 
   <div class="hero">
     <div class="hero-head">
@@ -1019,42 +1077,65 @@ async function geocode(query){
   return {lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), label: data[0].display_name.split(',').slice(0,3).join(',')};
 }
 
-/* ---------- pinning: PIN-derived AES-GCM vault in localStorage ----------
-   Nothing leaves the device. The PIN never touches disk — only a salt and
-   an encrypted blob are stored. A wrong PIN fails to decrypt (AES-GCM's
-   built-in auth check), which doubles as the unlock check. */
-const SALT_KEY = 'afield-salt';
-const VAULT_KEY = 'afield-vault';
-let cryptoKey = null;
+/* ---------- vault: envelope encryption ----------
+   A random Data Encryption Key (DEK) encrypts your pins. The DEK itself is
+   then wrapped (encrypted) separately by your PIN and, optionally, by a key
+   derived from Face ID / Touch ID via the WebAuthn PRF extension.
+
+   This matters: Face ID doesn't merely "approve" access here, it produces the
+   key material that actually decrypts your data. Someone who copied your
+   browser storage still couldn't read your pins without either your PIN or
+   your face on your device. */
+const SALT_KEY   = 'afield-salt';      // legacy (pre-envelope) installs
+const VAULT_KEY  = 'afield-vault';     // pins, encrypted with the DEK
+const WRAP_PIN   = 'afield-wrap-pin';  // DEK wrapped by PIN-derived key
+const WRAP_BIO   = 'afield-wrap-bio';  // DEK wrapped by passkey-derived key
+let dek = null;                        // live DEK once unlocked
 
 function b64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
 function unb64(str){ return Uint8Array.from(atob(str), c => c.charCodeAt(0)); }
+function readJSON(key){
+  try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+  catch(e){ return null; }
+}
 
-async function deriveKey(pin, saltBytes){
+async function deriveFromPin(pin, saltBytes){
   const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
     {name:'PBKDF2', salt:saltBytes, iterations:150000, hash:'SHA-256'},
-    material,
-    {name:'AES-GCM', length:256},
-    false,
-    ['encrypt','decrypt']
+    material, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']
   );
 }
-async function vaultEncrypt(key, obj){
+async function deriveFromPRF(prfBytes){
+  const material = await crypto.subtle.importKey('raw', prfBytes, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'HKDF', hash:'SHA-256', salt:new Uint8Array(0), info:new TextEncoder().encode('afield-vault')},
+    material, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']
+  );
+}
+async function encryptWith(key, obj){
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const data = new TextEncoder().encode(JSON.stringify(obj));
-  const cipher = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, data);
+  const cipher = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key,
+    new TextEncoder().encode(JSON.stringify(obj)));
   return {iv:b64(iv), data:b64(cipher)};
 }
-async function vaultDecrypt(key, payload){
+async function decryptWith(key, payload){
   const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(payload.iv)}, key, unb64(payload.data));
   return JSON.parse(new TextDecoder().decode(plain));
 }
+async function wrapDEK(key, dekKey){
+  const raw = await crypto.subtle.exportKey('raw', dekKey);
+  return encryptWith(key, b64(raw));
+}
+async function unwrapDEK(key, payload){
+  const rawB64 = await decryptWith(key, payload);
+  return crypto.subtle.importKey('raw', unb64(rawB64), {name:'AES-GCM'}, true, ['encrypt','decrypt']);
+}
+
 async function savePins(){
-  if(!cryptoKey) return;
+  if(!dek) return;
   try{
-    const payload = await vaultEncrypt(cryptoKey, pinnedStore);
-    localStorage.setItem(VAULT_KEY, JSON.stringify(payload));
+    localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, pinnedStore)));
   }catch(e){ console.error('Could not save pins', e); }
 }
 function togglePin(place){
@@ -1071,6 +1152,78 @@ function togglePin(place){
   render();
 }
 
+/* ---------- Face ID / Touch ID via WebAuthn PRF ---------- */
+const RP_ID = location.hostname;
+async function bioAvailable(){
+  if(!window.PublicKeyCredential || !navigator.credentials) return false;
+  if(!window.isSecureContext) return false;
+  try{
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  }catch(e){ return false; }
+}
+function bioEnrolled(){ return !!readJSON(WRAP_BIO); }
+
+// Enrol a platform passkey and wrap the DEK with its PRF output.
+async function enrolBio(){
+  const prfSalt = crypto.getRandomValues(new Uint8Array(32));
+  const cred = await navigator.credentials.create({
+    publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: {name: 'Afield', id: RP_ID},
+      user: {
+        id: crypto.getRandomValues(new Uint8Array(16)),
+        name: 'afield', displayName: 'Afield'
+      },
+      pubKeyCredParams: [{type:'public-key', alg:-7}, {type:'public-key', alg:-257}],
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        residentKey: 'required',
+        userVerification: 'required'
+      },
+      timeout: 60000,
+      extensions: {prf: {}}
+    }
+  });
+  const ext = cred.getClientExtensionResults();
+  if(!ext || !ext.prf || !ext.prf.enabled){
+    throw new Error('This device supports passkeys but not the PRF extension needed to derive an encryption key.');
+  }
+  const credId = b64(cred.rawId);
+  // A second call is needed to actually read the PRF output.
+  const prfBytes = await readPRF(credId, prfSalt);
+  const bioKey = await deriveFromPRF(prfBytes);
+  const wrapped = await wrapDEK(bioKey, dek);
+  localStorage.setItem(WRAP_BIO, JSON.stringify({credId, prfSalt:b64(prfSalt), ...wrapped}));
+}
+
+async function readPRF(credId, prfSalt){
+  const assertion = await navigator.credentials.get({
+    publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rpId: RP_ID,
+      allowCredentials: [{type:'public-key', id: unb64(credId)}],
+      userVerification: 'required',
+      timeout: 60000,
+      extensions: {prf: {eval: {first: prfSalt}}}
+    }
+  });
+  const res = assertion.getClientExtensionResults();
+  if(!res || !res.prf || !res.prf.results || !res.prf.results.first){
+    throw new Error('Could not read the key material from this passkey.');
+  }
+  return new Uint8Array(res.prf.results.first);
+}
+
+async function unlockWithBio(){
+  const rec = readJSON(WRAP_BIO);
+  if(!rec) throw new Error('No passkey enrolled on this device.');
+  const prfBytes = await readPRF(rec.credId, unb64(rec.prfSalt));
+  const bioKey = await deriveFromPRF(prfBytes);
+  dek = await unwrapDEK(bioKey, {iv:rec.iv, data:rec.data});
+  pinnedStore = await decryptWith(dek, readJSON(VAULT_KEY));
+  pinnedIds = new Set(Object.keys(pinnedStore));
+}
+
 /* ---------- lock screen ---------- */
 const lockScreen = document.getElementById('lockScreen');
 const appContent = document.getElementById('appContent');
@@ -1081,49 +1234,112 @@ const lockTitle = document.getElementById('lockTitle');
 const lockSub = document.getElementById('lockSub');
 const lockSubmit = document.getElementById('lockSubmit');
 const lockReset = document.getElementById('lockReset');
+const bioBtn = document.getElementById('bioBtn');
+const bioOffer = document.getElementById('bioOffer');
+const bioEnable = document.getElementById('bioEnable');
+const bioDismiss = document.getElementById('bioDismiss');
 
 function hasVault(){ return !!localStorage.getItem(VAULT_KEY); }
 
-function showLockUI(){
+function enterApp(){
+  lockScreen.classList.add('hidden');
+  appContent.style.display = '';
+  render();
+  maybeOfferBio();
+}
+
+async function maybeOfferBio(){
+  const dismissed = localStorage.getItem('afield-bio-dismissed');
+  if(bioEnrolled() || dismissed || !(await bioAvailable())) return;
+  bioOffer.style.display = 'flex';
+}
+
+async function showLockUI(){
   lockScreen.classList.remove('hidden');
   appContent.style.display = 'none';
   lockError.textContent = '';
   pinInput.value = '';
-  cryptoKey = null;
+  dek = null;
+  bioBtn.style.display = 'none';
+
   if(hasVault()){
-    lockTitle.textContent = 'Enter PIN';
+    lockTitle.textContent = 'Welcome back';
     lockSub.textContent = 'Unlock to see your pinned places.';
     pinConfirm.style.display = 'none';
     lockSubmit.textContent = 'Unlock';
     lockReset.style.display = 'block';
+    if(bioEnrolled()){
+      bioBtn.style.display = 'block';
+      lockSub.textContent = 'Unlock with Face ID, or enter your PIN.';
+      // Offer biometrics straight away rather than making them tap twice.
+      tryBio(true);
+    }
   } else {
     lockTitle.textContent = 'Set a PIN';
-    lockSub.textContent = "Choose a 4+ digit PIN. It encrypts your pinned places on this device — nobody else who picks up your phone can read them without it.";
+    lockSub.textContent = "Choose a 4+ digit PIN. It encrypts your pinned places on this device. You can add Face ID next, so this is the last time you'll need to type it.";
     pinConfirm.style.display = 'block';
     pinConfirm.value = '';
     lockSubmit.textContent = 'Set PIN & continue';
     lockReset.style.display = 'none';
   }
-  setTimeout(() => pinInput.focus(), 50);
+  setTimeout(() => { if(!bioEnrolled()) pinInput.focus(); }, 50);
 }
 
-async function unlockApp(){
-  cryptoKey = null;
-  const stored = localStorage.getItem(VAULT_KEY);
-  const salt = unb64(localStorage.getItem(SALT_KEY));
-  const key = await deriveKey(pinInput.value, salt);
+async function tryBio(silent){
+  lockError.textContent = '';
+  bioBtn.disabled = true;
   try{
-    pinnedStore = await vaultDecrypt(key, JSON.parse(stored));
-    pinnedIds = new Set(Object.keys(pinnedStore));
-    cryptoKey = key;
-    lockScreen.classList.add('hidden');
-    appContent.style.display = '';
-    render();
+    await unlockWithBio();
+    enterApp();
   }catch(e){
+    console.warn('Face ID unlock failed:', e);
+    // A cancel is not an error worth shouting about — the PIN is right there.
+    if(!silent || (e.name !== 'NotAllowedError' && e.name !== 'AbortError')){
+      lockError.textContent = 'Face ID unavailable — use your PIN.';
+    }
+    pinInput.focus();
+  }finally{
+    bioBtn.disabled = false;
+  }
+}
+
+async function unlockWithPin(){
+  dek = null;
+  const pin = pinInput.value;
+  try{
+    const pinWrap = readJSON(WRAP_PIN);
+    if(pinWrap){
+      const key = await deriveFromPin(pin, unb64(pinWrap.salt));
+      dek = await unwrapDEK(key, {iv:pinWrap.iv, data:pinWrap.data});
+      pinnedStore = await decryptWith(dek, readJSON(VAULT_KEY));
+    } else {
+      // Legacy install: vault was encrypted directly with the PIN key.
+      const key = await deriveFromPin(pin, unb64(localStorage.getItem(SALT_KEY)));
+      pinnedStore = await decryptWith(key, readJSON(VAULT_KEY));
+      await migrateToEnvelope(pin);   // re-save in the new format
+    }
+    pinnedIds = new Set(Object.keys(pinnedStore));
+    enterApp();
+  }catch(e){
+    dek = null;
     lockError.textContent = 'Incorrect PIN.';
     pinInput.value = '';
     pinInput.focus();
   }
+}
+
+async function writePinWrap(pin){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await deriveFromPin(pin, salt);
+  const wrapped = await wrapDEK(key, dek);
+  localStorage.setItem(WRAP_PIN, JSON.stringify({salt:b64(salt), ...wrapped}));
+}
+
+async function migrateToEnvelope(pin){
+  dek = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
+  await writePinWrap(pin);
+  localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, pinnedStore)));
+  localStorage.removeItem(SALT_KEY);
 }
 
 async function setPin(){
@@ -1131,30 +1347,45 @@ async function setPin(){
   const confirmVal = pinConfirm.value.trim();
   if(pin.length < 4){ lockError.textContent = 'Use at least 4 digits.'; return; }
   if(pin !== confirmVal){ lockError.textContent = "PINs don't match."; return; }
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  localStorage.setItem(SALT_KEY, b64(salt));
-  const key = await deriveKey(pin, salt);
   pinnedStore = {};
   pinnedIds = new Set();
-  cryptoKey = key;
-  const payload = await vaultEncrypt(key, pinnedStore);
-  localStorage.setItem(VAULT_KEY, JSON.stringify(payload));
-  lockScreen.classList.add('hidden');
-  appContent.style.display = '';
-  render();
+  dek = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
+  await writePinWrap(pin);
+  localStorage.setItem(VAULT_KEY, JSON.stringify(await encryptWith(dek, pinnedStore)));
+  enterApp();
 }
 
 lockSubmit.addEventListener('click', () => {
   lockError.textContent = '';
-  if(hasVault()) unlockApp(); else setPin();
+  if(hasVault()) unlockWithPin(); else setPin();
 });
+bioBtn.addEventListener('click', () => tryBio(false));
 pinInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') lockSubmit.click(); });
 pinConfirm.addEventListener('keydown', (e) => { if(e.key === 'Enter') lockSubmit.click(); });
 
+bioEnable.addEventListener('click', async () => {
+  bioEnable.disabled = true;
+  bioEnable.textContent = 'Waiting…';
+  try{
+    await enrolBio();
+    bioOffer.innerHTML = '<span class="bio-done">✓ Face ID enabled. Your PIN still works as a backup.</span>';
+    setTimeout(() => { bioOffer.style.display = 'none'; }, 3500);
+  }catch(e){
+    console.warn('Face ID setup failed:', e);
+    bioEnable.disabled = false;
+    bioEnable.textContent = 'Try again';
+    const msg = document.getElementById('bioMsg');
+    if(msg) msg.textContent = e.message || 'Could not set up Face ID on this device.';
+  }
+});
+bioDismiss.addEventListener('click', () => {
+  bioOffer.style.display = 'none';
+  try{ localStorage.setItem('afield-bio-dismissed', '1'); }catch(e){}
+});
+
 lockReset.addEventListener('click', () => {
-  if(confirm('This permanently deletes your pinned places on this device and cannot be undone. Reset?')){
-    localStorage.removeItem(VAULT_KEY);
-    localStorage.removeItem(SALT_KEY);
+  if(confirm('This permanently deletes your pinned places and Face ID setup on this device. It cannot be undone. Reset?')){
+    [VAULT_KEY, SALT_KEY, WRAP_PIN, WRAP_BIO, 'afield-bio-dismissed'].forEach(k => localStorage.removeItem(k));
     showLockUI();
   }
 });
@@ -1168,10 +1399,11 @@ function markHandoff(){
   setTimeout(() => { handingOff = false; }, 4000);
 }
 document.addEventListener('visibilitychange', () => {
-  if(document.hidden && cryptoKey && !handingOff){
+  if(document.hidden && dek && !handingOff){
     showLockUI();
   }
 });
+
 
 /* ---------- rendering ---------- */
 function render(){
