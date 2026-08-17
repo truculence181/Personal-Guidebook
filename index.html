@@ -11,7 +11,7 @@
   default-src 'none';
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src https://fonts.gstatic.com;
-  connect-src https://nominatim.openstreetmap.org https://overpass-api.de https://overpass.kumi.systems https://overpass.openstreetmap.ru;
+  connect-src https://nominatim.openstreetmap.org https://overpass-api.de https://overpass.kumi.systems https://overpass.openstreetmap.ru https://*.wikipedia.org;
   img-src 'self' data: https:;
   script-src 'self' 'unsafe-inline';
   frame-ancestors 'none';
@@ -31,6 +31,20 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+// Runs before first paint so there's no flash of the wrong theme.
+// Modes: 'auto' (follow OS), 'light', 'dark'.
+(function(){
+  var mode = null;
+  try{ mode = localStorage.getItem('afield-theme'); }catch(e){}
+  if(!mode) mode = 'auto';
+  var dark = mode === 'dark' ||
+    (mode === 'auto' && window.matchMedia &&
+     window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme-mode', mode);
+})();
+</script>
 <style>
   :root{
     --bg:#F2F5F7;
@@ -43,11 +57,42 @@
     --line:#E1E7EC;
     --rust:#B0455A;
     --good:#2C7A6B;
+    --glass:rgba(255,255,255,0.92);
+    --glass-ink:#141A1F;
+    --cover-outdoors:linear-gradient(135deg,#DFEDE9,#BCD6D0);
+    --cover-food:linear-gradient(135deg,#E4EBF2,#C4D4E2);
+    --cover-nightlife:linear-gradient(135deg,#E3E2F0,#C2C1DE);
+    --cover-culture:linear-gradient(135deg,#DCE6EC,#B4CAD8);
+    --cover-icon:rgba(20,26,31,0.32);
     --shadow-xs:0 1px 2px rgba(16,28,38,0.05);
     --shadow-sm:0 3px 10px rgba(16,28,38,0.07), 0 1px 2px rgba(16,28,38,0.05);
     --shadow-md:0 10px 24px rgba(16,28,38,0.11), 0 2px 6px rgba(16,28,38,0.05);
     --shadow-lg:0 24px 48px rgba(16,28,38,0.17), 0 8px 16px rgba(16,28,38,0.07);
   }
+  html[data-theme="dark"], body[data-theme="dark"]{
+    --bg:#0E1418;
+    --surface:#171F25;
+    --ink:#E6EDF2;
+    --ink-soft:#9BA9B4;
+    --ink-faint:#6B7A86;
+    --accent:#4FA8BF;
+    --accent-deep:#7BC5D8;
+    --line:#25313A;
+    --rust:#D96B80;
+    --good:#4FA88F;
+    --glass:rgba(12,18,22,0.82);
+    --glass-ink:#E6EDF2;
+    --cover-outdoors:linear-gradient(135deg,#1D2E2B,#2A4440);
+    --cover-food:linear-gradient(135deg,#1C2733,#2B3B4C);
+    --cover-nightlife:linear-gradient(135deg,#232336,#33334D);
+    --cover-culture:linear-gradient(135deg,#1B2731,#2A3D4C);
+    --cover-icon:rgba(230,237,242,0.30);
+    --shadow-xs:0 1px 2px rgba(0,0,0,0.40);
+    --shadow-sm:0 3px 10px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.35);
+    --shadow-md:0 10px 24px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.35);
+    --shadow-lg:0 24px 48px rgba(0,0,0,0.65), 0 8px 16px rgba(0,0,0,0.40);
+  }
+  html{background:var(--bg);}
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
     background:var(--bg);
@@ -61,6 +106,25 @@
 
   /* ---------- HERO ---------- */
   .hero{padding:30px 0 20px;}
+  .hero-head{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+  }
+  .theme-btn{
+    width:34px; height:34px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink-soft);
+    cursor:pointer;
+    font-size:14px; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:var(--shadow-xs);
+    flex-shrink:0;
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .theme-btn:hover{box-shadow:var(--shadow-sm);}
+  .theme-btn:active{transform:scale(0.9);}
+
   .eyebrow{
     font-family:'JetBrains Mono', monospace;
     font-size:11px;
@@ -304,7 +368,7 @@
     position:absolute; top:10px; right:10px;
     width:34px; height:34px;
     border-radius:50%;
-    background:rgba(255,255,255,0.9);
+    background:var(--glass);
     -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
     border:none; cursor:pointer;
     display:flex; align-items:center; justify-content:center;
@@ -317,7 +381,8 @@
 
   .rating-pill{
     position:absolute; bottom:10px; left:10px;
-    background:rgba(255,255,255,0.92);
+    background:var(--glass);
+    color:var(--glass-ink);
     -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
     border-radius:20px;
     padding:4px 10px;
@@ -502,7 +567,10 @@
 <div class="wrap" id="appContent" style="display:none;">
 
   <div class="hero">
-    <div class="eyebrow"><span class="dot"></span>LIVE FIELD GUIDE</div>
+    <div class="hero-head">
+      <div class="eyebrow"><span class="dot"></span>LIVE FIELD GUIDE</div>
+      <button class="theme-btn" id="themeBtn" title="Switch theme" aria-label="Switch theme"></button>
+    </div>
     <h1>What's worth<br><em>wandering to</em>?</h1>
     <div class="hero-row">
       <div>
@@ -615,14 +683,14 @@ const CAT_LABEL = {outdoors:"Outdoors", food:"Food & Drink", nightlife:"Nightlif
 /* ---------- cover art: real photo when we have one, otherwise a
    category tile that never breaks or shows a blank box ---------- */
 const COVER_ART = {
-  outdoors: {grad:"linear-gradient(135deg,#DFEDE9,#BCD6D0)", icon:'<path d="M3 18 L9 8 L13 14 L16 9 L21 18 Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="17" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'},
-  food: {grad:"linear-gradient(135deg,#E4EBF2,#C4D4E2)", icon:'<rect x="5" y="8" width="11" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M16 10.5h2a2 2 0 0 1 0 4h-2" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="5" y1="20" x2="16" y2="20" stroke="currentColor" stroke-width="1.4"/>'},
-  nightlife: {grad:"linear-gradient(135deg,#E3E2F0,#C2C1DE)", icon:'<path d="M6 4h12l-1.3 7.6a4.7 4.7 0 0 1-9.4 0L6 4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><line x1="12" y1="15.6" x2="12" y2="20" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="20" x2="16" y2="20" stroke="currentColor" stroke-width="1.4"/>'},
-  culture: {grad:"linear-gradient(135deg,#DCE6EC,#B4CAD8)", icon:'<path d="M12 3l7 5H5l7-5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><rect x="5" y="9" width="14" height="9" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="3" y1="20" x2="21" y2="20" stroke="currentColor" stroke-width="1.4"/>'}
+  outdoors: {grad:"var(--cover-outdoors)", icon:'<path d="M3 18 L9 8 L13 14 L16 9 L21 18 Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="17" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'},
+  food: {grad:"var(--cover-food)", icon:'<rect x="5" y="8" width="11" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M16 10.5h2a2 2 0 0 1 0 4h-2" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="5" y1="20" x2="16" y2="20" stroke="currentColor" stroke-width="1.4"/>'},
+  nightlife: {grad:"var(--cover-nightlife)", icon:'<path d="M6 4h12l-1.3 7.6a4.7 4.7 0 0 1-9.4 0L6 4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><line x1="12" y1="15.6" x2="12" y2="20" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="20" x2="16" y2="20" stroke="currentColor" stroke-width="1.4"/>'},
+  culture: {grad:"var(--cover-culture)", icon:'<path d="M12 3l7 5H5l7-5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><rect x="5" y="9" width="14" height="9" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="3" y1="20" x2="21" y2="20" stroke="currentColor" stroke-width="1.4"/>'}
 };
 function coverFor(p){
   const art = COVER_ART[p.cat] || COVER_ART.outdoors;
-  const fallback = `<div class="cover-fallback" style="color:rgba(20,26,31,0.32)"><svg viewBox="0 0 24 24">${art.icon}</svg></div>`;
+  const fallback = `<div class="cover-fallback" style="color:var(--cover-icon)"><svg viewBox="0 0 24 24">${art.icon}</svg></div>`;
   const img = p.photo ? `<img src="${p.photo}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();">` : "";
   return `<div class="card-cover" style="background:${art.grad}">${fallback}${img}</div>`;
 }
@@ -632,6 +700,43 @@ let activePlaces = SEED_PLACES;
 let activeCat = "all";
 let pinnedIds = new Set();
 let pinnedStore = {}; // id -> full place object, so pinned view survives dataset changes
+
+/* ---------- theme ---------- */
+const THEME_ORDER = ['auto', 'light', 'dark'];
+const THEME_ICON = {auto:'◐', light:'☀', dark:'☾'};
+const THEME_LABEL = {auto:'Following system theme', light:'Light theme', dark:'Dark theme'};
+const themeBtn = document.getElementById('themeBtn');
+const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+function applyTheme(mode){
+  const dark = mode === 'dark' || (mode === 'auto' && darkQuery && darkQuery.matches);
+  const theme = dark ? 'dark' : 'light';
+  // Set on both html and body: some embedded/sandboxed viewers restyle the
+  // root element, which would otherwise swallow the variable override.
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.setAttribute('data-theme-mode', mode);
+  if(document.body) document.body.setAttribute('data-theme', theme);
+  themeBtn.textContent = THEME_ICON[mode];
+  themeBtn.title = THEME_LABEL[mode];
+  // Keep the browser/status bar chrome in step with the theme.
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute('content', dark ? '#0E1418' : '#F2F5F7');
+  try{ localStorage.setItem('afield-theme', mode); }catch(e){}
+}
+function currentMode(){
+  return document.documentElement.getAttribute('data-theme-mode') || 'auto';
+}
+themeBtn.addEventListener('click', () => {
+  const next = THEME_ORDER[(THEME_ORDER.indexOf(currentMode()) + 1) % THEME_ORDER.length];
+  applyTheme(next);
+});
+// If we're on 'auto', follow the OS when it flips (e.g. at sunset).
+if(darkQuery){
+  darkQuery.addEventListener('change', () => {
+    if(currentMode() === 'auto') applyTheme('auto');
+  });
+}
+applyTheme(currentMode());
 
 /* ---------- geometry ---------- */
 function haversine(lat1, lon1, lat2, lon2){
@@ -753,14 +858,81 @@ function describeTags(tags){
   return bits.length ? ("Listed as " + bits.join(', ') + " on OpenStreetMap.") : "Community-mapped spot on OpenStreetMap.";
 }
 function photoFor(tags){
-  // Only ever use openly-licensed, directly-hotlinkable sources so images
-  // never depend on a key or break due to hotlink protection.
-  if(tags.image && /^https?:\/\//.test(tags.image)) return tags.image;
-  if(tags.wikimedia_commons){
-    const file = tags.wikimedia_commons.replace(/^File:/i, '');
-    return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=500`;
+  // Only openly-licensed, directly-hotlinkable sources, so images never
+  // depend on an API key or break due to hotlink protection.
+  if(tags.image && /^https:\/\//.test(tags.image)) return tags.image;
+  for(const key of ['wikimedia_commons', 'image:0', 'photo']){
+    const val = tags[key];
+    if(!val) continue;
+    if(/^https:\/\//.test(val)) return val;
+    if(/^File:/i.test(val)){
+      const file = val.replace(/^File:/i, '');
+      return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=600`;
+    }
+    // Category: values point at a gallery, not an image — skip them.
   }
   return null;
+}
+// Many parks, museums and landmarks carry a wikipedia tag but no image tag.
+// Capture the article title so we can look up its lead photo in one batch.
+function wikiTitleFor(tags){
+  const raw = tags.wikipedia;
+  if(!raw) return null;
+  const m = raw.match(/^([a-z\-]+):(.+)$/i);
+  if(!m) return null;
+  return {lang: m[1].toLowerCase(), title: m[2]};
+}
+
+// Wikipedia's API takes up to 50 titles per call and supports CORS, so a
+// whole result set costs one or two requests rather than one per place.
+async function attachWikiPhotos(places){
+  const byLang = {};
+  places.forEach(p => {
+    if(p.photo || !p._wiki) return;
+    (byLang[p._wiki.lang] = byLang[p._wiki.lang] || []).push(p);
+  });
+
+  await Promise.all(Object.entries(byLang).map(async ([lang, group]) => {
+    for(let i = 0; i < group.length; i += 50){
+      const batch = group.slice(i, i + 50);
+      const titles = batch.map(p => p._wiki.title).join('|');
+      const url = `https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*`
+                + `&prop=pageimages&piprop=thumbnail&pithumbsize=600&redirects=1`
+                + `&titles=${encodeURIComponent(titles)}`;
+      const t = withTimeout(null, 8000);
+      try{
+        const resp = await fetch(url, {signal: t.signal});
+        t.clear();
+        if(!resp.ok) continue;
+        const data = await resp.json();
+        const pages = (data.query && data.query.pages) || {};
+        // Match results back by normalised title, since the API may
+        // redirect or re-case what we asked for.
+        const found = {};
+        Object.values(pages).forEach(pg => {
+          if(pg.thumbnail && pg.thumbnail.source){
+            found[pg.title.toLowerCase()] = pg.thumbnail.source;
+          }
+        });
+        (data.query.redirects || []).forEach(r => {
+          const hit = found[r.to.toLowerCase()];
+          if(hit) found[r.from.toLowerCase()] = hit;
+        });
+        (data.query.normalized || []).forEach(n => {
+          const hit = found[n.to.toLowerCase()];
+          if(hit) found[n.from.toLowerCase()] = hit;
+        });
+        batch.forEach(p => {
+          const hit = found[p._wiki.title.toLowerCase()];
+          if(hit) p.photo = hit;
+        });
+      }catch(err){
+        t.clear();
+        console.warn('Wikipedia photo lookup failed:', err);
+      }
+    }
+  }));
+  return places;
 }
 function withTimeout(promise, ms){
   const ctrl = new AbortController();
@@ -811,6 +983,7 @@ async function fetchLivePlaces(lat, lon){
           hours: parseOsmHours(el.tags.opening_hours),
           phone: el.tags.phone || el.tags["contact:phone"] || null,
           photo: photoFor(el.tags),
+          _wiki: wikiTitleFor(el.tags),
           source: "osm"
         }));
     }catch(err){
@@ -890,8 +1063,8 @@ function togglePin(place){
     delete pinnedStore[place.id];
   } else {
     pinnedIds.add(place.id);
-    // Drop the transient distance field so stale mileage isn't persisted.
-    const {_dist, ...clean} = place;
+    // Drop transient fields so stale mileage/lookup data isn't persisted.
+    const {_dist, _wiki, ...clean} = place;
     pinnedStore[place.id] = clean;
   }
   savePins();
@@ -1134,6 +1307,12 @@ document.getElementById("locateBtn").addEventListener("click", () => {
         statusLine.textContent = livePlaces.length
           ? `Found ${livePlaces.length} spots near you.`
           : "Nothing mapped nearby — try searching a larger town.";
+        btn.disabled = false;
+        render();
+        // Photos arrive a beat later; re-render once they're in.
+        await attachWikiPhotos(livePlaces);
+        if(activePlaces === livePlaces) render();
+        return;
       }catch(err){
         console.error("Overpass error:", err);
         // Network down or Overpass unreachable: fall back to the built-in set
@@ -1197,6 +1376,9 @@ async function runSearch(){
         ? `Found ${livePlaces.length} mapped spots near ${place.label}.`
         : `No mapped spots turned up near ${place.label} — try a nearby city.`;
       render();
+      // Photos arrive a beat later; re-render once they're in.
+      await attachWikiPhotos(livePlaces);
+      if(activePlaces === livePlaces) render();
     }catch(fetchErr){
       console.error("Overpass error:", fetchErr);
       statusLine.textContent = `Found "${place.label}" but couldn't load nearby spots: ${fetchErr.message}. (See browser console for details.)`;
