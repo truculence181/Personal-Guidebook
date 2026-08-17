@@ -73,15 +73,15 @@
   }
   html[data-theme="dark"], body[data-theme="dark"]{
     --bg:#0E1418;
-    --surface:#171F25;
+    --surface:#1A232A;
     --ink:#E6EDF2;
-    --ink-soft:#9BA9B4;
-    --ink-faint:#6B7A86;
-    --accent:#4FA8BF;
-    --accent-deep:#7BC5D8;
-    --line:#25313A;
-    --rust:#D96B80;
-    --good:#4FA88F;
+    --ink-soft:#A9B6C0;
+    --ink-faint:#93A0AA;
+    --accent:#5BB4CB;
+    --accent-deep:#82CBDD;
+    --line:#5D707F;
+    --rust:#E67F92;
+    --good:#5CC0A5;
     --glass:rgba(12,18,22,0.82);
     --glass-ink:#E6EDF2;
     --cover-outdoors:linear-gradient(135deg,#1D2E2B,#2A4440);
@@ -650,6 +650,8 @@
     background:none; border:none; cursor:pointer;
     padding:2px 3px; line-height:1;
     color:var(--ink-faint);
+    min-width:24px; min-height:24px;
+    display:inline-flex; align-items:center; justify-content:center;
     transition:transform .1s ease;
   }
   .mark-btn:active{transform:scale(0.85);}
@@ -759,6 +761,8 @@
     background:none; border:none; cursor:pointer;
     font-size:13px; line-height:1; color:var(--ink-faint);
     padding:4px 3px;
+    min-width:24px; min-height:24px;
+    display:inline-flex; align-items:center; justify-content:center;
   }
   .plan-mv:disabled{opacity:.25; cursor:default;}
   .plan-mv:active:not(:disabled){color:var(--accent);}
