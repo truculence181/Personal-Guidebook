@@ -1560,6 +1560,9 @@ async function fetchLivePlaces(lat, lon, radiusMi){
   throw new Error(`all Overpass mirrors failed (${lastErr ? lastErr.message : 'unknown error'})`);
 }
 
+// Nominatim's usage policy caps clients at 1 request/second. Enforce it here
+// so rapid searches queue instead of getting the IP blocked.
+let lastGeocodeAt = 0;
 async function geocode(query){
   const wait = 1100 - (Date.now() - lastGeocodeAt);
   if(wait > 0) await new Promise(r => setTimeout(r, wait));
