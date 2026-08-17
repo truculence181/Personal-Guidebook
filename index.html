@@ -1509,55 +1509,83 @@ const OVERPASS_MIRRORS = [
 const MI_TO_M = 1609.34;
 let searchRadiusMi = 10;
 
+// Overpass evaluates every `around` clause separately, so 60 of them across a
+// dense city is enough to get the connection dropped. Grouping values per tag
+// key into one regex clause cuts that to a handful of passes.
+function buildOverpassQuery(lat, lon, meters, cats, cap, timeoutSec){
+  const byKey = {};
+  cats.forEach(cat => cat.sel.forEach(sel => {
+    const [k, v] = sel.split('=');
+    (byKey[k] = byKey[k] || []).push(v);
+  }));
+  const clauses = Object.entries(byKey).map(([k, vals]) =>
+    `node["${k}"~"^(${[...new Set(vals)].join('|')})$"]["name"](around:${meters},${lat},${lon});`
+  ).join('\n    ');
+  return `[out:json][timeout:${timeoutSec}];(\n    ${clauses}\n  );out body ${cap};`;
+}
+
 async function fetchLivePlaces(lat, lon, radiusMi){
   const mi = radiusMi || searchRadiusMi;
-  const m = Math.round(mi * MI_TO_M);
-  // Wide radii over many categories can overwhelm the free Overpass servers,
-  // so ask for fewer results per category as the area grows.
-  const cap = mi <= 10 ? 250 : mi <= 30 ? 350 : 450;
-  const clauses = CATEGORIES.flatMap(cat =>
-    cat.sel.map(sel => {
-      const [k, v] = sel.split('=');
-      return `node["${k}"="${v}"](around:${m},${lat},${lon});`;
-    })
-  ).join('\n    ');
+  // Only fetch what's actually being shown. Browsing "All" in a dense city is
+  // the expensive case, so that's where we trim hardest.
+  const cats = activeCat === 'all'
+    ? CATEGORIES
+    : CATEGORIES.filter(c => c.key === activeCat);
 
-  const query = `[out:json][timeout:${mi > 30 ? 60 : 30}];(
-    ${clauses}
-  );out body ${cap};`;
+  // Try the requested radius, then progressively smaller ones. A partial
+  // result beats an error screen, and dense cities fail at wide radii.
+  const attempts = [mi];
+  if(mi > 5) attempts.push(Math.round(mi / 2));
+  if(mi > 15) attempts.push(5);
 
   let lastErr;
-  for(const endpoint of OVERPASS_MIRRORS){
-    const t = withTimeout(null, mi > 30 ? 30000 : 18000);
-    try{
-      const resp = await fetch(endpoint, {method:"POST", body:query, signal:t.signal});
-      t.clear();
-      if(!resp.ok) throw new Error(`${endpoint} responded ${resp.status}`);
-      const data = await resp.json();
-      const seen = new Set();
-      return data.elements
-        .filter(el => el.tags && el.tags.name && el.lat && el.lon)
-        .filter(el => { if(seen.has(el.tags.name)) return false; seen.add(el.tags.name); return true; })
-        .map(el => ({
-          id: 'osm-'+el.id,
-          name: el.tags.name,
-          cat: classifyTags(el.tags),
-          lat: el.lat, lng: el.lon,
-          rating: null, ratingCount: null, price: null,
-          blurb: describeTags(el.tags),
-          hours: parseOsmHours(el.tags.opening_hours),
-          phone: el.tags.phone || el.tags["contact:phone"] || null,
-          photo: photoFor(el.tags),
-          _wiki: wikiTitleFor(el.tags),
-          source: "osm"
-        }));
-    }catch(err){
-      t.clear();
-      console.warn(`Overpass mirror failed (${endpoint}):`, err);
-      lastErr = err;
+  for(const tryMi of attempts){
+    const meters = Math.round(tryMi * MI_TO_M);
+    const cap = tryMi <= 10 ? 300 : 400;
+    const timeoutSec = tryMi > 25 ? 90 : 45;
+    const query = buildOverpassQuery(lat, lon, meters, cats, cap, timeoutSec);
+
+    for(const endpoint of OVERPASS_MIRRORS){
+      const t = withTimeout(null, tryMi > 25 ? 45000 : 25000);
+      try{
+        const resp = await fetch(endpoint, {method:"POST", body:query, signal:t.signal});
+        t.clear();
+        if(resp.status === 429 || resp.status === 504){
+          throw new Error(`${endpoint} busy (${resp.status})`);
+        }
+        if(!resp.ok) throw new Error(`${endpoint} responded ${resp.status}`);
+        const data = await resp.json();
+        const seen = new Set();
+        const places = data.elements
+          .filter(el => el.tags && el.tags.name && el.lat && el.lon)
+          .filter(el => { if(seen.has(el.tags.name)) return false; seen.add(el.tags.name); return true; })
+          .map(el => ({
+            id: 'osm-'+el.id,
+            name: el.tags.name,
+            cat: classifyTags(el.tags),
+            lat: el.lat, lng: el.lon,
+            rating: null, ratingCount: null, price: null,
+            blurb: describeTags(el.tags),
+            hours: parseOsmHours(el.tags.opening_hours),
+            phone: el.tags.phone || el.tags["contact:phone"] || null,
+            photo: photoFor(el.tags),
+            _wiki: wikiTitleFor(el.tags),
+            source: "osm"
+          }));
+        // Tell the caller if we had to shrink the area to succeed.
+        places._radiusUsed = tryMi;
+        return places;
+      }catch(err){
+        t.clear();
+        console.warn(`Overpass ${tryMi}mi via ${endpoint} failed:`, err);
+        lastErr = err;
+      }
     }
+    console.warn(`All mirrors failed at ${tryMi} miles — trying a smaller area.`);
   }
-  throw new Error(`all Overpass mirrors failed (${lastErr ? lastErr.message : 'unknown error'})`);
+  throw new Error(lastErr && /abort/i.test(lastErr.name || '')
+    ? 'the map servers timed out — this area may be too dense for a wide search'
+    : `map servers unreachable (${lastErr ? lastErr.message : 'unknown'})`);
 }
 
 // Nominatim's usage policy caps clients at 1 request/second. Enforce it here
@@ -2459,8 +2487,10 @@ document.getElementById("locateBtn").addEventListener("click", () => {
         const livePlaces = await fetchLivePlaces(userLoc.lat, userLoc.lng);
         activePlaces = livePlaces;
         document.getElementById("sourceNote").textContent = "Showing mapped spots around you";
+        const used = livePlaces._radiusUsed || searchRadiusMi;
+        const shrunk = used < searchRadiusMi ? ` (narrowed to ${used} mi — dense area)` : '';
         statusLine.textContent = livePlaces.length
-          ? `Found ${livePlaces.length} spots within ${searchRadiusMi} miles.`
+          ? `Found ${livePlaces.length} spots near you${shrunk}.`
           : `Nothing mapped within ${searchRadiusMi} miles — try a wider radius.`;
         btn.disabled = false;
         render();
@@ -2529,9 +2559,11 @@ async function runSearch(){
     try{
       const livePlaces = await fetchLivePlaces(place.lat, place.lng);
       activePlaces = livePlaces;
+      const used = livePlaces._radiusUsed || searchRadiusMi;
+      const shrunk = used < searchRadiusMi ? ` (narrowed to ${used} mi — the area was too dense for ${searchRadiusMi})` : '';
       statusLine.textContent = livePlaces.length
-        ? `Found ${livePlaces.length} spots within ${searchRadiusMi} miles of ${place.label}.`
-        : `Nothing mapped within ${searchRadiusMi} miles of ${place.label} — try a wider radius.`;
+        ? `Found ${livePlaces.length} spots near ${place.label}${shrunk}.`
+        : `Nothing mapped near ${place.label} — try a wider radius or another category.`;
       render();
       // Photos arrive a beat later; re-render once they're in.
       await attachWikiPhotos(livePlaces);
@@ -2618,12 +2650,30 @@ openNowBtn.addEventListener("click", () => {
   syncControls();
   render();
 });
-catSelect.addEventListener("change", () => {
+catSelect.addEventListener("change", async () => {
+  const prev = activeCat;
   activeCat = catSelect.value;
   // Choosing a category means you want to browse, not stay in a saved list.
   if(activeView !== "browse"){ activeView = "browse"; }
   syncControls();
   render();
+  // Queries are scoped to the chosen category, so narrowing from "All" can be
+  // served from memory, but picking a new specific category needs a fetch.
+  if(lastCenter && activeCat !== 'all' && prev !== 'all'){
+    const statusLine = document.getElementById("statusLine");
+    statusLine.textContent = `Loading ${CAT_LABEL[activeCat]}…`;
+    try{
+      const places = await fetchLivePlaces(lastCenter.lat, lastCenter.lng);
+      activePlaces = places;
+      statusLine.textContent = `${places.length} ${CAT_LABEL[activeCat]} nearby.`;
+      render();
+      await attachWikiPhotos(places);
+      if(activePlaces === places) render();
+    }catch(err){
+      console.error(err);
+      statusLine.textContent = `Couldn't load that category: ${err.message}`;
+    }
+  }
 });
 syncControls();
 
