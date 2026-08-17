@@ -409,6 +409,75 @@
   }
 
   /* ---------- SECTION LABEL ---------- */
+  .section-row{
+    display:flex; align-items:center; gap:12px;
+    margin:28px 0 14px;
+  }
+  .section-row .section-label{margin:0; flex:1; min-width:0;}
+  .page-size{
+    display:flex; align-items:center; gap:6px;
+    flex-shrink:0;
+  }
+  .page-size label{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  #pageSize{
+    -webkit-appearance:none; appearance:none;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:5px 22px 5px 9px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11.5px;
+    color:var(--ink);
+    cursor:pointer;
+    box-shadow:var(--shadow-xs);
+    background-image:linear-gradient(45deg, transparent 50%, var(--ink-faint) 50%),
+                     linear-gradient(135deg, var(--ink-faint) 50%, transparent 50%);
+    background-position:calc(100% - 12px) 50%, calc(100% - 8px) 50%;
+    background-size:4px 4px, 4px 4px;
+    background-repeat:no-repeat;
+  }
+  #pageSize:focus{outline:none; border-color:var(--accent);}
+
+  .pager{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:10px 12px;
+    margin-top:4px;
+    box-shadow:var(--shadow-xs);
+  }
+  .pager-btn{
+    width:34px; height:34px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--bg);
+    color:var(--ink);
+    font-size:17px; line-height:1;
+    cursor:pointer;
+    flex-shrink:0;
+    transition:transform .12s ease;
+  }
+  .pager-btn:active:not(:disabled){transform:scale(0.9);}
+  .pager-btn:disabled{opacity:.3; cursor:default;}
+  .pager-mid{
+    flex:1; text-align:center;
+    display:flex; flex-direction:column; gap:2px;
+  }
+  .pager-range{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px; color:var(--ink);
+  }
+  .pager-page{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10px; color:var(--ink-faint);
+  }
+  .pager .pager-range:only-child{color:var(--ink-faint); font-size:11px;}
+
   .section-label{
     display:flex; align-items:center; gap:10px;
     margin:28px 0 14px;
@@ -949,8 +1018,20 @@
     <button class="surprise" id="surpriseBtn">✦ Surprise me with something open</button>
   </div>
 
-  <div class="section-label" id="sectionLabel">Nearby</div>
+  <div class="section-row">
+    <div class="section-label" id="sectionLabel">Nearby</div>
+    <div class="page-size">
+      <label for="pageSize">Show</label>
+      <select id="pageSize">
+        <option value="10">10</option>
+        <option value="20">20</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+    </div>
+  </div>
   <div id="cardList"></div>
+  <div id="pager"></div>
 
   <footer>afield · live data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></footer>
 </div>
@@ -1084,6 +1165,14 @@ let activePlaces = SEED_PLACES;
 let activeView = "browse";   // browse | pinned | plan
 let activeCat = "all";       // all | category key
 let openOnly = false;
+let pageSize = 10;          // 10 | 20 | 50 | 100
+let page = 0;               // zero-indexed
+try{
+  const saved = parseInt(localStorage.getItem('afield-page-size'), 10);
+  if([10,20,50,100].includes(saved)) pageSize = saved;
+}catch(e){}
+// Any change to what's being listed should send you back to the first page.
+function resetPage(){ page = 0; }
 let pinnedIds = new Set();
 let pinnedStore = {}; // id -> full place object, so pinned view survives dataset changes
 
@@ -2111,6 +2200,9 @@ function slotPickerHTML(p){
 
 function renderPlan(list, label){
   label.textContent = "Day plan";
+  // The plan is a single itinerary, not a paged list.
+  document.getElementById("pager").innerHTML = '';
+  document.querySelector(".page-size").style.display = 'none';
   const dayName = new Date(dayPlan.date + 'T12:00:00')
     .toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'});
   const legs = planLegs();
@@ -2227,6 +2319,14 @@ function render(){
   }
   label.textContent = sectionLabelText(items.length);
 
+  // Pagination is presentational: filtering, sorting and the compass all still
+  // operate on the full result set.
+  document.querySelector(".page-size").style.display = '';
+  const totalItems = items.length;
+  const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
+  if(page >= pageCount) page = pageCount - 1;
+  const pageItems = items.slice(page * pageSize, (page + 1) * pageSize);
+
   if(items.length === 0){
     const msg = activeView === "pinned"
       ? "Nothing pinned yet — tap the ☆ on any place to save it here."
@@ -2234,11 +2334,12 @@ function render(){
         ? "Nothing open right now in this category — try turning off Open now."
         : `Nothing found within ${searchRadiusMi} miles — try a wider radius or another category.`;
     list.innerHTML = `<div class="empty">${msg}</div>`;
+    document.getElementById("pager").innerHTML = '';
     updateCompass([]);
     return;
   }
 
-  list.innerHTML = items.map(p => {
+  list.innerHTML = pageItems.map(p => {
     const status = openStatus(p.hours);
     const statusClass = status.open === true ? "status-open" : status.open === false ? "status-closed" : "status-unknown";
     const distHtml = userLoc ? `<span class="dist">${fmtDist(p._dist)}</span>` : "";
@@ -2323,6 +2424,8 @@ function render(){
     });
   });
 
+  renderPager(totalItems, pageCount);
+
   // Keep a drawer open across re-renders triggered from inside it.
   if(openDrawerId){
     const btn = list.querySelector(`.card-add[data-id="${CSS.escape(openDrawerId)}"]`);
@@ -2331,6 +2434,37 @@ function render(){
   }
 
   updateCompass(items);
+}
+
+function renderPager(total, pageCount){
+  const pager = document.getElementById("pager");
+  if(total === 0){ pager.innerHTML = ''; return; }
+
+  const first = page * pageSize + 1;
+  const last = Math.min((page + 1) * pageSize, total);
+  const range = `<span class="pager-range">${first}–${last} of ${total}</span>`;
+
+  if(pageCount <= 1){
+    pager.innerHTML = `<div class="pager">${range}</div>`;
+    return;
+  }
+  pager.innerHTML = `
+    <div class="pager">
+      <button class="pager-btn" id="pagePrev" ${page === 0 ? 'disabled' : ''} aria-label="Previous page">‹</button>
+      <span class="pager-mid">${range}<span class="pager-page">page ${page+1} of ${pageCount}</span></span>
+      <button class="pager-btn" id="pageNext" ${page >= pageCount-1 ? 'disabled' : ''} aria-label="Next page">›</button>
+    </div>`;
+
+  const go = (delta) => {
+    page += delta;
+    render();
+    // A new page should start at the top, not mid-list.
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  };
+  const prev = document.getElementById("pagePrev");
+  const next = document.getElementById("pageNext");
+  if(prev) prev.addEventListener("click", () => go(-1));
+  if(next) next.addEventListener("click", () => go(1));
 }
 
 function markRowHTML(id){
@@ -2370,6 +2504,7 @@ async function refreshPlaces(){
     statusLine.textContent = "Refreshing…";
     const places = await fetchLivePlaces(lastCenter.lat, lastCenter.lng);
     activePlaces = places;
+    resetPage();
     statusLine.textContent = places.length
       ? `Refreshed — ${places.length} spots within ${searchRadiusMi} miles${lastLabel ? ' of ' + lastLabel : ''}.`
       : `Nothing found within ${searchRadiusMi} miles — try a wider radius.`;
@@ -2486,6 +2621,7 @@ document.getElementById("locateBtn").addEventListener("click", () => {
       try{
         const livePlaces = await fetchLivePlaces(userLoc.lat, userLoc.lng);
         activePlaces = livePlaces;
+        resetPage();
         document.getElementById("sourceNote").textContent = "Showing mapped spots around you";
         const used = livePlaces._radiusUsed || searchRadiusMi;
         const shrunk = used < searchRadiusMi ? ` (narrowed to ${used} mi — dense area)` : '';
@@ -2559,6 +2695,7 @@ async function runSearch(){
     try{
       const livePlaces = await fetchLivePlaces(place.lat, place.lng);
       activePlaces = livePlaces;
+      resetPage();
       const used = livePlaces._radiusUsed || searchRadiusMi;
       const shrunk = used < searchRadiusMi ? ` (narrowed to ${used} mi — the area was too dense for ${searchRadiusMi})` : '';
       statusLine.textContent = livePlaces.length
@@ -2588,6 +2725,7 @@ document.getElementById("radiusChips").addEventListener("click", async (e) => {
   chip.classList.add("active");
   const prev = searchRadiusMi;
   searchRadiusMi = +chip.dataset.mi;
+  resetPage();
   render();   // instant narrowing while any refetch runs
 
   // Widening needs fresh data; narrowing can just filter what we have.
@@ -2597,6 +2735,7 @@ document.getElementById("radiusChips").addEventListener("click", async (e) => {
     try{
       const places = await fetchLivePlaces(lastCenter.lat, lastCenter.lng);
       activePlaces = places;
+      resetPage();
       statusLine.textContent = `Found ${places.length} spots within ${searchRadiusMi} miles${lastLabel ? ' of ' + lastLabel : ''}.`;
       render();
       await attachWikiPhotos(places);
@@ -2639,6 +2778,7 @@ function syncControls(){
 
 function setView(v){
   activeView = (activeView === v) ? "browse" : v;
+  resetPage();
   syncControls();
   render();
 }
@@ -2647,6 +2787,7 @@ viewPlan.addEventListener("click", () => setView("plan"));
 openNowBtn.addEventListener("click", () => {
   if(activeView === "plan") return;
   openOnly = !openOnly;
+  resetPage();
   syncControls();
   render();
 });
@@ -2655,6 +2796,7 @@ catSelect.addEventListener("change", async () => {
   activeCat = catSelect.value;
   // Choosing a category means you want to browse, not stay in a saved list.
   if(activeView !== "browse"){ activeView = "browse"; }
+  resetPage();
   syncControls();
   render();
   // Queries are scoped to the chosen category, so narrowing from "All" can be
@@ -2665,6 +2807,7 @@ catSelect.addEventListener("change", async () => {
     try{
       const places = await fetchLivePlaces(lastCenter.lat, lastCenter.lng);
       activePlaces = places;
+      resetPage();
       statusLine.textContent = `${places.length} ${CAT_LABEL[activeCat]} nearby.`;
       render();
       await attachWikiPhotos(places);
