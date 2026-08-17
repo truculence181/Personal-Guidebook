@@ -103,7 +103,33 @@
     min-height:100vh;
     padding-bottom:60px;
     -webkit-font-smoothing:antialiased;
+    /* Stop Safari's own bounce/refresh fighting our gesture. */
+    overscroll-behavior-y:contain;
   }
+
+  /* ---------- PULL TO REFRESH ---------- */
+  #ptr{
+    position:fixed;
+    top:0; left:50%;
+    transform:translate(-50%, -46px);
+    width:36px; height:36px;
+    border-radius:50%;
+    background:var(--surface);
+    border:1px solid var(--line);
+    box-shadow:var(--shadow-md);
+    display:flex; align-items:center; justify-content:center;
+    z-index:90;
+    opacity:0;
+    pointer-events:none;
+  }
+  #ptr.snap{transition:transform .25s cubic-bezier(.2,.8,.2,1), opacity .25s ease;}
+  #ptrSpin{
+    font-size:17px; line-height:1;
+    color:var(--accent);
+    transition:transform .1s linear;
+  }
+  #ptr.spinning #ptrSpin{animation:ptrspin .8s linear infinite;}
+  @keyframes ptrspin{from{transform:rotate(0)} to{transform:rotate(360deg)}}
   .wrap{max-width:640px; margin:0 auto; padding:0 18px;}
 
   /* ---------- HERO ---------- */
@@ -837,6 +863,8 @@
 </style>
 </head>
 <body>
+
+<div id="ptr"><div id="ptrSpin">↻</div></div>
 
 <div id="lockScreen">
   <div class="lock-box">
@@ -2292,6 +2320,116 @@ function updateCompass(items){
   needle.style.transform = `translate(-50%,-100%) rotate(${brg}deg)`;
   compassLabel.textContent = nearestOpen.name.length > 22 ? nearestOpen.name.slice(0,20) + "…" : nearestOpen.name;
 }
+
+/* ---------- refresh ----------
+   Shared by the pull gesture and any other caller: re-query wherever the last
+   search was centred, keeping the current radius. */
+let refreshing = false;
+async function refreshPlaces(){
+  if(refreshing) return;
+  const statusLine = document.getElementById("statusLine");
+
+  // Nothing fetched yet — a pull should get a location rather than no-op.
+  if(!lastCenter){
+    document.getElementById("locateBtn").click();
+    return;
+  }
+  refreshing = true;
+  try{
+    statusLine.textContent = "Refreshing…";
+    const places = await fetchLivePlaces(lastCenter.lat, lastCenter.lng);
+    activePlaces = places;
+    statusLine.textContent = places.length
+      ? `Refreshed — ${places.length} spots within ${searchRadiusMi} miles${lastLabel ? ' of ' + lastLabel : ''}.`
+      : `Nothing found within ${searchRadiusMi} miles — try a wider radius.`;
+    render();
+    await attachWikiPhotos(places);
+    if(activePlaces === places) render();
+  }catch(err){
+    console.error("Refresh failed:", err);
+    statusLine.textContent = `Couldn't refresh: ${err.message}`;
+  }finally{
+    refreshing = false;
+  }
+}
+
+/* ---------- pull to refresh ---------- */
+(function(){
+  const ptr = document.getElementById('ptr');
+  const THRESHOLD = 72;     // how far to pull before it fires
+  const MAX = 110;          // cap so it can't be dragged forever
+  let startY = 0, startX = 0, dist = 0, tracking = false, armed = false;
+
+  function place(y, opacity){
+    ptr.style.transform = `translate(-50%, ${y}px)`;
+    ptr.style.opacity = opacity;
+  }
+  function reset(animate){
+    ptr.classList.toggle('snap', !!animate);
+    ptr.classList.remove('spinning');
+    place(-46, 0);
+    document.getElementById('ptrSpin').style.transform = '';
+    setTimeout(() => ptr.classList.remove('snap'), 260);
+  }
+
+  function canPull(){
+    // Only from the very top, only in the app, never mid-refresh or locked.
+    return window.scrollY <= 0
+      && !refreshing
+      && document.getElementById('lockScreen').classList.contains('hidden');
+  }
+
+  document.addEventListener('touchstart', (e) => {
+    if(!canPull() || e.touches.length !== 1) return;
+    startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
+    tracking = true;
+    armed = false;
+    dist = 0;
+  }, {passive:true});
+
+  document.addEventListener('touchmove', (e) => {
+    if(!tracking) return;
+    dist = e.touches[0].clientY - startY;
+
+    // Upward move, or the page scrolled: this isn't a pull.
+    if(dist <= 0 || window.scrollY > 0){
+      if(armed) reset(true);
+      tracking = false; armed = false;
+      return;
+    }
+    // Ignore sideways drags — the chip and radius rows scroll horizontally.
+    if(Math.abs(e.touches[0].clientX - startX) > Math.abs(dist)){
+      tracking = false;
+      if(armed) reset(true);
+      armed = false;
+      return;
+    }
+
+    e.preventDefault();          // take over from native rubber-banding
+    armed = true;
+    const pulled = Math.min(dist * 0.5, MAX);   // resistance
+    ptr.classList.remove('snap');
+    place(pulled, Math.min(pulled / THRESHOLD, 1));
+    document.getElementById('ptrSpin').style.transform =
+      `rotate(${Math.min(pulled / THRESHOLD, 1) * 270}deg)`;
+  }, {passive:false});
+
+  document.addEventListener('touchend', () => {
+    if(!tracking){ return; }
+    tracking = false;
+    if(!armed){ return; }
+    const pulled = Math.min(dist * 0.5, MAX);
+    if(pulled >= THRESHOLD * 0.85){
+      ptr.classList.add('snap', 'spinning');
+      place(58, 1);
+      refreshPlaces().finally(() => setTimeout(() => reset(true), 300));
+    } else {
+      reset(true);
+    }
+    armed = false;
+  }, {passive:true});
+})();
 
 /* ---------- controls ---------- */
 document.getElementById("locateBtn").addEventListener("click", () => {
