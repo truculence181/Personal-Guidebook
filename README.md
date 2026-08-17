@@ -1,4 +1,4 @@
-# Afield
+# Personal Guidebook
 
 A live field guide to what's worth wandering to near you.
 
