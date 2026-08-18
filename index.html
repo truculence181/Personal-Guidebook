@@ -1536,6 +1536,14 @@ if(darkQuery){
 applyTheme(currentMode());
 
 /* ---------- geometry ---------- */
+// Apple Maps treats q+ll as "drop a labeled pin at this exact coordinate" —
+// a generic marker with no business data behind it. q+sll instead runs a real
+// search biased near that point, which resolves to the actual place listing
+// (photos, hours, reviews) when Apple's index has a match.
+function appleMapsURL(name, lat, lng){
+  return `https://maps.apple.com/?q=${encodeURIComponent(name)}&sll=${lat},${lng}`;
+}
+
 function haversine(lat1, lon1, lat2, lon2){
   const R = 3958.8;
   const dLat = (lat2-lat1) * Math.PI/180;
@@ -2392,7 +2400,7 @@ function renderPlan(list, label){
           <span class="plan-clock">${fmtClock(mins)}</span>
         </div>
         <div class="plan-place">
-          <a href="https://maps.apple.com/?q=${encodeURIComponent(stop.name)}&ll=${stop.lat},${stop.lng}" rel="noopener">${stop.name}</a>
+          <a href="${appleMapsURL(stop.name, stop.lat, stop.lng)}" rel="noopener">${stop.name}</a>
           ${markRowHTML(stop.id)}
           ${warn}
         </div>
@@ -2514,7 +2522,7 @@ function render(){
     const hrs = todayHoursText(p.hours);
     const hoursHtml = hrs ? `<div class="card-hours"><span class="hours-day">Today</span><span class="hours-val">${hrs}</span></div>` : "";
     // Apple Maps: q= labels the pin, ll= drops it at the exact coordinates.
-    const mapUrl = `https://maps.apple.com/?q=${encodeURIComponent(p.name)}&ll=${p.lat},${p.lng}`;
+    const mapUrl = appleMapsURL(p.name, p.lat, p.lng);
     const callHtml = p.phone ? `<a href="tel:${p.phone.replace(/\s/g,'')}">Call</a>` : "";
     const isPinned = pinnedIds.has(p.id);
     return `
@@ -3010,7 +3018,7 @@ function renderSharedStops(plan){
     return `<div class="shared-stop">
       <div class="shared-badge">${badge}</div>
       <div>
-        <a href="https://maps.apple.com/?q=${encodeURIComponent(s.name)}&ll=${s.lat},${s.lng}" rel="noopener">${s.name}</a>
+        <a href="${appleMapsURL(s.name, s.lat, s.lng)}" rel="noopener">${s.name}</a>
         ${warn}
       </div>
     </div>`;
