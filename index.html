@@ -11,7 +11,7 @@
   default-src 'none';
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src https://fonts.gstatic.com;
-  connect-src https://nominatim.openstreetmap.org https://overpass-api.de https://overpass.kumi.systems https://overpass.openstreetmap.ru https://*.wikipedia.org https://www.wikidata.org;
+  connect-src https://nominatim.openstreetmap.org https://overpass-api.de https://overpass.kumi.systems https://overpass.openstreetmap.ru https://*.wikipedia.org https://www.wikidata.org https://api.open-meteo.com;
   img-src 'self' data: https:;
   script-src 'self' 'unsafe-inline';
   frame-ancestors 'none';
@@ -602,6 +602,13 @@
     font-size:10.5px;
     color:var(--ink-faint);
     margin-top:2px;
+  }
+  .header-weather{
+    font-family:var(--font-label);
+    font-size:11.5px;
+    font-weight:500;
+    color:var(--ink-soft);
+    margin-top:3px;
   }
 
   /* compass */
@@ -1307,6 +1314,13 @@
     display:flex; flex-direction:column; gap:2px;
   }
   .plan-clock{font-size:10px; color:var(--ink-faint);}
+  .plan-weather{
+    font-family:var(--font-label);
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-top:1px;
+    white-space:nowrap;
+  }
   .plan-place{flex:1; font-size:14px; line-height:1.35;}
   .plan-place a{color:var(--ink); text-decoration:none; font-weight:500;}
   .plan-place a:active{color:var(--accent);}
@@ -1705,6 +1719,7 @@
       <div>
         <div class="coords" id="coordsBox">No location yet</div>
         <div class="source-note" id="sourceNote">Example picks — search or locate for live spots near you</div>
+        <div class="header-weather" id="headerWeather" style="display:none;"></div>
       </div>
       <div class="compass">
         <div class="compass-ticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
@@ -2389,6 +2404,69 @@ function ridePickerHTML(id, dropLat, dropLng, dropName, pickup){
     <a href="${uber}" target="_blank" rel="noopener" class="ride-opt uber" data-handoff="1"><span class="ride-dot uber"></span>Uber</a>
     <a href="${lyft}" target="_blank" rel="noopener" class="ride-opt lyft" data-handoff="1"><span class="ride-dot lyft"></span>Lyft</a>
   </div>`;
+}
+
+/* ---------- weather ----------
+   Open-Meteo: free, no key, CORS-enabled, and — the detail that made this
+   worth building — supports comma-separated multi-location queries in one
+   request, so a whole day plan's worth of stops costs one call, not one
+   per stop. Same non-blocking pattern as photos: render first, weather
+   fills in afterward.
+
+   Field-name note: Open-Meteo's docs and SDKs aren't fully consistent on
+   `weathercode` vs `weather_code` across versions. Rather than guess and
+   risk a silent parsing miss, every read below checks both. */
+function wCode(obj){ return obj ? (obj.weather_code ?? obj.weathercode ?? null) : null; }
+
+async function fetchWeather(points){
+  if(!points.length) return [];
+  const lat = points.map(p => p.lat).join(',');
+  const lon = points.map(p => p.lng).join(',');
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+            + `&hourly=temperature_2m,weathercode,weather_code,precipitation_probability`
+            + `&current=temperature_2m,weathercode,weather_code`
+            + `&temperature_unit=fahrenheit&timezone=auto&forecast_days=16`;
+  const t = withTimeout(null, 8000);
+  try{
+    const resp = await fetch(url, {signal:t.signal});
+    t.clear();
+    if(!resp.ok) throw new Error(`weather responded ${resp.status}`);
+    const data = await resp.json();
+    // Single location returns one object; multi-location returns an array
+    // in the same order the coordinates were requested.
+    return Array.isArray(data) ? data : [data];
+  }catch(err){
+    t.clear();
+    console.warn('Weather fetch failed:', err);
+    return points.map(() => null);
+  }
+}
+
+const WEATHER_ICON = {0:'☀️'}; // clear; everything else falls through the ranges below
+function weatherIcon(code){
+  if(code == null) return '';
+  if(code === 0) return '☀️';
+  if(code <= 3) return '⛅';
+  if(code === 45 || code === 48) return '🌫️';
+  if(code >= 51 && code <= 67) return '🌦️';
+  if(code >= 71 && code <= 77) return '❄️';
+  if(code >= 80 && code <= 82) return '🌧️';
+  if(code >= 85 && code <= 86) return '🌨️';
+  if(code >= 95) return '⛈️';
+  return '🌡️';
+}
+function weatherLabel(code){
+  if(code == null) return '';
+  if(code === 0) return 'Clear';
+  if(code <= 3) return 'Partly cloudy';
+  if(code === 45 || code === 48) return 'Foggy';
+  if(code >= 51 && code <= 57) return 'Drizzle';
+  if(code >= 61 && code <= 67) return 'Rain';
+  if(code >= 71 && code <= 77) return 'Snow';
+  if(code >= 80 && code <= 82) return 'Rain showers';
+  if(code >= 85 && code <= 86) return 'Snow showers';
+  if(code >= 95) return 'Thunderstorm';
+  return 'Weather';
 }
 
 function haversine(lat1, lon1, lat2, lon2){
@@ -3334,11 +3412,87 @@ function renderSaved(list, label){
   updateCompass([]);
 }
 
+/* ---------- plan weather ----------
+   Fetches once per distinct (date, stops) combination, not on every
+   re-render — renderPlan() gets called for reasons unrelated to weather
+   (a rating tap while viewing the plan, etc.), so a signature comparison
+   avoids re-fetching every time the plan just happens to redraw. */
+let planWeather = null;      // array aligned with dayPlan.stops, or null before first fetch
+let planWeatherSig = null;
+let planWeatherLoading = false;
+
+function planSignature(plan){
+  return plan.date + '|' + plan.stops.map(s => `${s.id}:${s.lat},${s.lng}`).join(',');
+}
+
+async function ensurePlanWeather(){
+  const sig = planSignature(dayPlan);
+  if(sig === planWeatherSig || planWeatherLoading) return;
+  if(!dayPlan.stops.length){ planWeather = null; planWeatherSig = sig; return; }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const [y, m, d] = dayPlan.date.split('-').map(Number);
+  const dayOffset = Math.round((new Date(y, m-1, d) - today) / 86400000);
+
+  // Beyond the 16-day forecast horizon (a saved favorite reused months
+  // later, say) — mark unavailable rather than guessing or erroring.
+  if(dayOffset < 0 || dayOffset > 15){
+    planWeather = dayPlan.stops.map(() => ({available:false}));
+    planWeatherSig = sig;
+    return;
+  }
+
+  planWeatherLoading = true;
+  try{
+    const results = await fetchWeather(dayPlan.stops.map(s => ({lat:s.lat, lng:s.lng})));
+    planWeather = dayPlan.stops.map((s, i) => {
+      const r = results[i];
+      if(!r || !r.hourly) return {available:false};
+      const idx = dayOffset * 24 + Math.floor(stopTime(i) / 60);
+      const temps = r.hourly.temperature_2m;
+      const codeArr = Array.isArray(r.hourly.weather_code) ? r.hourly.weather_code : r.hourly.weathercode;
+      const rainArr = r.hourly.precipitation_probability;
+      const temp = temps ? temps[idx] : null;
+      const code = codeArr ? codeArr[idx] : null;
+      const rain = rainArr ? rainArr[idx] : null;
+      if(temp == null || code == null) return {available:false};
+      return {available:true, temp:Math.round(temp), code, rain};
+    });
+    planWeatherSig = sig;
+  }catch(err){
+    console.warn('Plan weather failed:', err);
+    planWeather = dayPlan.stops.map(() => ({available:false}));
+    planWeatherSig = sig;
+  }finally{
+    planWeatherLoading = false;
+    if(activeView === 'plan') render();
+  }
+}
+
+/* ---------- header weather badge ---------- */
+async function refreshHeaderWeather(lat, lng){
+  const el = document.getElementById('headerWeather');
+  try{
+    const results = await fetchWeather([{lat, lng}]);
+    const r = results[0];
+    const temp = r && r.current ? r.current.temperature_2m : null;
+    const codeArr = r && r.current ? (r.current.weather_code ?? r.current.weathercode) : null;
+    if(temp == null || codeArr == null){ el.style.display = 'none'; return; }
+    el.innerHTML = `${weatherIcon(codeArr)} ${Math.round(temp)}°`;
+    el.title = weatherLabel(codeArr);
+    el.style.display = 'block';
+  }catch(err){
+    console.warn('Header weather failed:', err);
+    el.style.display = 'none';
+  }
+}
+
 function renderPlan(list, label){
   label.textContent = "Day plan";
   // The plan is a single itinerary, not a paged list.
   document.getElementById("pager").innerHTML = '';
   document.querySelector(".page-size").style.display = 'none';
+  ensurePlanWeather(); // fire-and-forget; re-renders itself once data arrives
   const dayName = new Date(dayPlan.date + 'T12:00:00')
     .toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'});
   const legs = planLegs();
@@ -3354,6 +3508,10 @@ function renderPlan(list, label){
     const badge = meal
       ? `${SLOT_BY_KEY[stop.slot].icon} ${SLOT_BY_KEY[stop.slot].label}`
       : `◉ Sight`;
+    const w = planWeather && planWeather[i] && planWeather[i].available ? planWeather[i] : null;
+    const weatherChip = w
+      ? `<span class="plan-weather" title="${weatherLabel(w.code)}${w.rain != null ? ', ' + w.rain + '% chance of rain' : ''}">${weatherIcon(w.code)} ${w.temp}°</span>`
+      : '';
     const leg = legs[i] != null
       ? `<div class="plan-leg">
           <span class="leg-line"></span>${fmtDist(legs[i])}
@@ -3367,6 +3525,7 @@ function renderPlan(list, label){
         <div class="plan-time">
           <span class="plan-badge ${meal?'meal':''}">${badge}</span>
           <span class="plan-clock">${fmtClock(mins)}</span>
+          ${weatherChip}
         </div>
         <div class="plan-place">
           <a href="${appleMapsURL(stop.name, stop.lat, stop.lng)}" rel="noopener">${stop.name}</a>
@@ -3717,6 +3876,7 @@ async function refreshPlaces(){
       ? `Refreshed — ${places.length} spots within ${searchRadiusMi} miles${lastLabel ? ' of ' + lastLabel : ''}.`
       : `Nothing found within ${searchRadiusMi} miles — try a wider radius.`;
     render();
+    refreshHeaderWeather(lastCenter.lat, lastCenter.lng);
     await enrichPhotos(places);
     if(activePlaces === places) render();
   }catch(err){
@@ -3864,6 +4024,7 @@ document.getElementById("locateBtn").addEventListener("click", () => {
       btn.textContent = "📍 Re-check my location";
       statusLine.textContent = "Located. Fetching what's around you…";
       render();
+      refreshHeaderWeather(userLoc.lat, userLoc.lng);
 
       try{
         const livePlaces = await fetchLivePlaces(userLoc.lat, userLoc.lng);
@@ -3938,6 +4099,7 @@ async function runSearch(){
     document.getElementById("coordsBox").innerHTML = `position — <span>${userLoc.lat.toFixed(4)}, ${userLoc.lng.toFixed(4)}</span>`;
     document.getElementById("sourceNote").textContent = `Showing community-mapped spots near ${place.label}`;
     statusLine.textContent = "Fetching nearby spots…";
+    refreshHeaderWeather(place.lat, place.lng);
 
     try{
       const livePlaces = await fetchLivePlaces(place.lat, place.lng);
