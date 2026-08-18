@@ -221,6 +221,10 @@
   }
   [data-skin="zen"] .hero h1{font-weight:500; letter-spacing:.01em;}
   [data-skin="zen"] .section-label{letter-spacing:.16em; font-weight:500;}
+  [data-skin="zen"] .compass-ticks i:nth-child(2), [data-skin="zen"] .compass-ticks i:nth-child(4),
+  [data-skin="zen"] .compass-ticks i:nth-child(6), [data-skin="zen"] .compass-ticks i:nth-child(8){
+    display:none;
+  }
 
   /* Nature — organic, asymmetric, hand-touched. Corners deliberately don't
      match each other, and section labels get a leaf mark instead of the
@@ -284,7 +288,7 @@
   [data-skin="adventure"] .chip, [data-skin="adventure"] .locate-btn,
   [data-skin="adventure"] .lock-btn, [data-skin="adventure"] .pin-input,
   [data-skin="adventure"] #catSelect, [data-skin="adventure"] #skinSelect,
-  [data-skin="adventure"] .shared-stop{ border-width:2px; }
+  [data-skin="adventure"] .shared-stop, [data-skin="adventure"] .compass{ border-width:2px; }
   [data-skin="adventure"] .hero h1{font-size:26px; line-height:1.35; letter-spacing:.01em;}
   [data-skin="adventure"] .card-name{font-size:20px;}
   [data-skin="adventure"] .section-label, [data-skin="adventure"] .card-cat,
@@ -602,20 +606,55 @@
 
   /* compass */
   .compass{
-    width:56px; height:56px;
+    width:64px; height:64px;
     border-radius:50%;
     border:1px solid var(--line);
     position:relative;
     flex-shrink:0;
-    background:var(--surface);
+    background:radial-gradient(circle at 50% 50%, var(--surface) 58%, var(--bg) 100%);
     box-shadow:var(--shadow-xs);
   }
-  .compass .tick{position:absolute; inset:0;}
-  .compass .tick::before, .compass .tick::after{
-    content:""; position:absolute; background:var(--line);
+  .compass-ticks{position:absolute; inset:0;}
+  .compass-ticks i{
+    position:absolute; inset:0;
+    display:flex; justify-content:center;
+    font-style:normal;
   }
-  .compass .tick::before{top:4px; left:50%; width:1px; height:5px; transform:translateX(-50%);}
-  .compass .tick::after{bottom:4px; left:50%; width:1px; height:5px; transform:translateX(-50%);}
+  .compass-ticks i::before{
+    content:"";
+    width:1px; height:4px;
+    background:var(--line);
+    margin-top:4px;
+  }
+  /* The four cardinal ticks (N/E/S/W) run longer and darker than the
+     intercardinal ones, same hierarchy a real compass rose uses. */
+  .compass-ticks i:nth-child(1){transform:rotate(0deg);}
+  .compass-ticks i:nth-child(2){transform:rotate(45deg);}
+  .compass-ticks i:nth-child(3){transform:rotate(90deg);}
+  .compass-ticks i:nth-child(4){transform:rotate(135deg);}
+  .compass-ticks i:nth-child(5){transform:rotate(180deg);}
+  .compass-ticks i:nth-child(6){transform:rotate(225deg);}
+  .compass-ticks i:nth-child(7){transform:rotate(270deg);}
+  .compass-ticks i:nth-child(8){transform:rotate(315deg);}
+  .compass-ticks i:nth-child(1)::before,
+  .compass-ticks i:nth-child(3)::before,
+  .compass-ticks i:nth-child(5)::before,
+  .compass-ticks i:nth-child(7)::before{
+    height:6px;
+    background:var(--ink-faint);
+  }
+  .cdir{
+    position:absolute;
+    font-family:var(--font-label);
+    font-size:7.5px;
+    font-weight:600;
+    color:var(--ink-faint);
+    line-height:1;
+  }
+  .cdir.n{top:5px; left:50%; transform:translateX(-50%); color:var(--accent); font-weight:700;}
+  .cdir.e{right:5px; top:50%; transform:translateY(-50%);}
+  .cdir.s{bottom:5px; left:50%; transform:translateX(-50%);}
+  .cdir.w{left:5px; top:50%; transform:translateY(-50%);}
   .needle{
     position:absolute; top:50%; left:50%;
     width:2px; height:18px;
@@ -638,8 +677,9 @@
 
   /* ---------- CONTROLS ---------- */
   .controls{padding:26px 0 4px;}
+  .locate-row{display:flex; align-items:center; gap:8px;}
   .locate-btn{
-    width:100%;
+    flex:1;
     background:var(--ink);
     color:var(--bg);
     border:none;
@@ -654,6 +694,37 @@
     transition:transform .15s cubic-bezier(.2,.8,.2,1), box-shadow .15s ease;
   }
   .locate-btn:hover{box-shadow:var(--shadow-md); transform:translateY(-1px);}
+
+  .info-tip{
+    flex-shrink:0;
+    width:24px; height:24px; min-width:24px; min-height:24px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink-faint);
+    font-size:12px;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    box-shadow:var(--shadow-xs);
+  }
+  .info-tip:active{transform:scale(0.9);}
+  .info-tip.open{color:var(--accent); border-color:var(--accent);}
+
+  .tip-bubble{
+    display:none;
+    position:fixed;
+    z-index:60;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    box-shadow:var(--shadow-md);
+    padding:10px 12px;
+    font-family:var(--font-body);
+    font-size:12.5px;
+    line-height:1.45;
+    color:var(--ink-soft);
+  }
+  .tip-bubble.open{display:block;}
   .locate-btn:active{transform:translateY(0) scale(0.98); box-shadow:var(--shadow-xs);}
   .locate-btn:disabled{opacity:.5; cursor:default; transform:none; box-shadow:var(--shadow-xs);}
 
@@ -691,13 +762,6 @@
   .search-row button:hover{box-shadow:var(--shadow-sm);}
   .search-row button:active{transform:scale(0.97);}
   .search-row button:disabled{opacity:.5; cursor:default;}
-  .search-hint{
-    font-family:var(--font-label);
-    font-size:10.5px;
-    color:var(--ink-faint);
-    margin-top:8px;
-  }
-
   .status-line{
     font-family:var(--font-label);
     font-size:11.5px;
@@ -758,7 +822,7 @@
     color:var(--ink-faint);
     font-size:11px;
   }
-  #catSelect, #skinSelect{
+  #catSelect, #skinSelect, #radiusSelect{
     -webkit-appearance:none; appearance:none;
     width:100%;
     background:var(--surface);
@@ -772,9 +836,9 @@
     cursor:pointer;
     box-shadow:var(--shadow-xs);
   }
-  #catSelect:focus, #skinSelect:focus{outline:none; border-color:var(--accent);}
-  #catSelect:disabled, #skinSelect:disabled{cursor:default;}
-  #catSelect option, #skinSelect option{background:var(--surface); color:var(--ink);}
+  #catSelect:focus, #skinSelect:focus, #radiusSelect:focus{outline:none; border-color:var(--accent);}
+  #catSelect:disabled, #skinSelect:disabled, #radiusSelect:disabled{cursor:default;}
+  #catSelect option, #skinSelect option, #radiusSelect option{background:var(--surface); color:var(--ink);}
 
   .chip-divider{
     width:1px;
@@ -784,17 +848,17 @@
     flex-shrink:0;
   }
   .radius-row{
+    display:flex; align-items:center; gap:10px;
     margin-top:10px;
-    align-items:center;
   }
   .radius-label{
     font-family:var(--font-label);
     font-size:10px; letter-spacing:.1em; text-transform:uppercase;
     color:var(--ink-faint);
     flex-shrink:0;
-    padding-right:2px;
   }
-  .radius-chip{padding:6px 12px; font-size:11px;}
+  .radius-select-wrap{flex:none; width:110px; min-width:0;}
+  .radius-select-wrap select{font-size:12.5px; padding:7px 26px 7px 12px;}
 
   .surprise{
     font-family:var(--font-label);
@@ -1561,6 +1625,7 @@
 <body>
 
 <div id="ptr"><div id="ptrSpin">↻</div></div>
+<div class="tip-bubble" id="tipBubble"></div>
 
 <div id="sharedScreen" class="hidden">
   <div class="shared-box">
@@ -1638,11 +1703,15 @@
     <h1>What's worth<br><em>wandering to</em>?</h1>
     <div class="hero-row">
       <div>
-        <div class="coords" id="coordsBox">position — <span>not yet located</span></div>
-        <div class="source-note" id="sourceNote">Showing example picks near Pearland, TX</div>
+        <div class="coords" id="coordsBox">No location yet</div>
+        <div class="source-note" id="sourceNote">Example picks — search or locate for live spots near you</div>
       </div>
       <div class="compass">
-        <div class="tick"></div>
+        <div class="compass-ticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <span class="cdir n">N</span>
+        <span class="cdir e">E</span>
+        <span class="cdir s">S</span>
+        <span class="cdir w">W</span>
         <div class="needle" id="needle"></div>
         <div class="compass-label" id="compassLabel">nearest pick</div>
       </div>
@@ -1650,15 +1719,18 @@
   </div>
 
   <div class="controls">
-    <button class="locate-btn" id="locateBtn">📍 Find what's near me</button>
+    <div class="locate-row">
+      <button class="locate-btn" id="locateBtn">📍 Find what's near me</button>
+      <button class="info-tip" data-tip="privacy" aria-label="Location privacy info">ⓘ</button>
+    </div>
 
     <div class="search-row">
       <input type="text" id="locationInput" placeholder="Or search a city / address to plan ahead…">
       <button id="searchBtn">Search</button>
+      <button class="info-tip" data-tip="source" aria-label="About search sources">ⓘ</button>
     </div>
-    <div class="search-hint">Both search and "near me" pull live spots from OpenStreetMap.</div>
 
-    <div class="status-line" id="statusLine">Uses location data only in your browser — nothing is stored on a server.</div>
+    <div class="status-line" id="statusLine"></div>
 
     <div class="filter-bar">
       <button class="chip pin-chip" id="viewPinned">★ Pinned</button>
@@ -1673,13 +1745,17 @@
       <button class="chip" id="openNow">Open now</button>
     </div>
 
-    <div class="chips radius-row" id="radiusChips">
+    <div class="radius-row" id="radiusChips">
       <span class="radius-label">Within</span>
-      <button class="chip radius-chip" data-mi="5">5 mi</button>
-      <button class="chip radius-chip active" data-mi="10">10 mi</button>
-      <button class="chip radius-chip" data-mi="20">20 mi</button>
-      <button class="chip radius-chip" data-mi="30">30 mi</button>
-      <button class="chip radius-chip" data-mi="50">50 mi</button>
+      <div class="select-wrap radius-select-wrap">
+        <select id="radiusSelect" aria-label="Search radius">
+          <option value="5">5 mi</option>
+          <option value="10" selected>10 mi</option>
+          <option value="20">20 mi</option>
+          <option value="30">30 mi</option>
+          <option value="50">50 mi</option>
+        </select>
+      </div>
     </div>
     <button class="surprise" id="surpriseBtn">✦ Surprise me with something open</button>
   </div>
@@ -2519,7 +2595,7 @@ async function attachWikiPhotos(places){
 // Both passes run through here so every call site gets both sources without
 // needing to remember to chain them individually.
 async function enrichPhotos(places){
-  await enrichPhotos(places);
+  await attachWikiPhotos(places);
   await attachWikidataPhotos(places);
   return places;
 }
@@ -3609,7 +3685,7 @@ function updateCompass(items){
   const needle = document.getElementById("needle");
   const compassLabel = document.getElementById("compassLabel");
   if(!userLoc || items.length === 0){
-    compassLabel.textContent = userLoc ? "no matches" : "no fix yet";
+    compassLabel.textContent = userLoc ? "no matches" : "no location";
     return;
   }
   const nearestOpen = items.find(p => openStatus(p.hours).open !== false) || items[0];
@@ -3650,6 +3726,45 @@ async function refreshPlaces(){
     refreshing = false;
   }
 }
+
+/* ---------- info tips ----------
+   Explanatory text that used to sit permanently under the search row and
+   the locate button now lives here instead, shown only when someone taps
+   the ⓘ next to the relevant control. One shared bubble handles every tip
+   rather than each spot getting its own popover markup. */
+const TIP_TEXT = {
+  source: 'Both search and "near me" pull live spots from OpenStreetMap — a free, open map database anyone can contribute to.',
+  privacy: 'Location data stays in your browser. Nothing is ever sent to or stored on a server.'
+};
+const tipBubble = document.getElementById('tipBubble');
+function showTip(btn){
+  const key = btn.dataset.tip;
+  const text = TIP_TEXT[key];
+  if(!text) return;
+  // Tapping the same icon again closes it rather than re-showing it.
+  if(btn.classList.contains('open')){ hideTip(); return; }
+  document.querySelectorAll('.info-tip.open').forEach(b => b.classList.remove('open'));
+  btn.classList.add('open');
+  tipBubble.textContent = text;
+  tipBubble.classList.add('open');
+  const rect = btn.getBoundingClientRect();
+  const width = Math.min(240, window.innerWidth - 24);
+  let left = rect.left + rect.width / 2 - width / 2;
+  left = Math.max(12, Math.min(left, window.innerWidth - width - 12));
+  tipBubble.style.width = width + 'px';
+  tipBubble.style.left = left + 'px';
+  tipBubble.style.top = (rect.bottom + 8) + 'px';
+}
+function hideTip(){
+  tipBubble.classList.remove('open');
+  document.querySelectorAll('.info-tip.open').forEach(b => b.classList.remove('open'));
+}
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.info-tip');
+  if(btn){ e.stopPropagation(); showTip(btn); return; }
+  if(!e.target.closest('.tip-bubble')) hideTip();
+});
+window.addEventListener('scroll', hideTip, {passive:true});
 
 /* ---------- pull to refresh ---------- */
 (function(){
@@ -3850,13 +3965,10 @@ async function runSearch(){
   }
 }
 
-document.getElementById("radiusChips").addEventListener("click", async (e) => {
-  const chip = e.target.closest(".radius-chip");
-  if(!chip) return;
-  document.querySelectorAll(".radius-chip").forEach(c => c.classList.remove("active"));
-  chip.classList.add("active");
+document.getElementById("radiusSelect").addEventListener("change", async (e) => {
+  const select = e.target;
   const prev = searchRadiusMi;
-  searchRadiusMi = +chip.dataset.mi;
+  searchRadiusMi = +select.value;
   resetPage();
   render();   // instant narrowing while any refetch runs
 
