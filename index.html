@@ -597,7 +597,7 @@
   .card-actions{
     display:flex; border-top:1px solid var(--line);
   }
-  .card-actions a{
+  .card-actions a, .card-actions-ride{
     flex:1;
     text-align:center;
     padding:11px 0;
@@ -608,10 +608,47 @@
     color:var(--ink);
     text-decoration:none;
     border-right:1px solid var(--line);
+    background:none; border-top:none; border-bottom:none;
+    cursor:pointer;
     transition:background .12s ease;
   }
-  .card-actions a:last-child{border-right:none;}
-  .card-actions a:active{background:var(--bg);}
+  .card-actions a:last-child, .card-actions-ride:last-child{border-right:none;}
+  .card-actions a:active, .card-actions-ride:active{background:var(--bg);}
+
+  .ride-picker{
+    display:none;
+    border-top:1px solid var(--line);
+  }
+  .ride-picker.open{display:flex;}
+  .ride-opt{
+    flex:1;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    padding:11px 0;
+    font-family:'Inter', sans-serif;
+    font-size:12.5px; font-weight:600;
+    text-decoration:none;
+    color:var(--ink);
+    border-right:1px solid var(--line);
+  }
+  .ride-opt:last-child{border-right:none;}
+  .ride-opt:active{background:var(--bg);}
+  .ride-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
+  .ride-dot.uber{background:#0A0A0A;}
+  .ride-dot.lyft{background:#FF00BF;}
+  html[data-theme="dark"] .ride-dot.uber{background:#F0F0F0;}
+
+  .leg-ride{
+    background:none; border:1px solid var(--line);
+    border-radius:10px;
+    padding:2px 9px;
+    margin-left:auto;
+    font-family:'JetBrains Mono', monospace;
+    font-size:9.5px; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--ink-soft);
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .leg-ride:active{background:var(--bg);}
 
   .chip.plan-chip{color:var(--accent-deep);}
   .chip.plan-chip.active{background:var(--accent); border-color:var(--accent); color:#fff;}
@@ -1544,6 +1581,38 @@ function appleMapsURL(name, lat, lng){
   return `https://maps.apple.com/?q=${encodeURIComponent(name)}&sll=${lat},${lng}`;
 }
 
+// Both are plain deep links — no API key, no backend. Uber's is the more
+// robust of the two: no developer registration needed, and `pickup=my_location`
+// lets the Uber app read live GPS itself rather than us supplying a
+// coordinate that might already be stale by the time it opens. Lyft's
+// universal link format nominally wants a partner (client ID) parameter tied
+// to a registered developer account; omitted here since this app has no
+// backend to hold one — the link still opens Lyft's ride screen without it,
+// just without Lyft-side attribution.
+function uberRideURL(dropLat, dropLng, dropName, pickup){
+  const pickupParams = pickup
+    ? `pickup[latitude]=${pickup.lat}&pickup[longitude]=${pickup.lng}`
+    : `pickup=my_location`;
+  return `https://m.uber.com/ul/?action=setPickup&${pickupParams}`
+       + `&dropoff[latitude]=${dropLat}&dropoff[longitude]=${dropLng}`
+       + `&dropoff[nickname]=${encodeURIComponent(dropName)}`;
+}
+function lyftRideURL(dropLat, dropLng, pickup){
+  const pickupParams = pickup
+    ? `&pickup[latitude]=${pickup.lat}&pickup[longitude]=${pickup.lng}`
+    : ''; // no current-location shorthand on Lyft's side; rider sets it in-app
+  return `https://lyft.com/ride?id=lyft${pickupParams}`
+       + `&destination[latitude]=${dropLat}&destination[longitude]=${dropLng}`;
+}
+function ridePickerHTML(id, dropLat, dropLng, dropName, pickup){
+  const uber = uberRideURL(dropLat, dropLng, dropName, pickup);
+  const lyft = lyftRideURL(dropLat, dropLng, pickup);
+  return `<div class="ride-picker" id="ride-${id}">
+    <a href="${uber}" target="_blank" rel="noopener" class="ride-opt uber" data-handoff="1"><span class="ride-dot uber"></span>Uber</a>
+    <a href="${lyft}" target="_blank" rel="noopener" class="ride-opt lyft" data-handoff="1"><span class="ride-dot lyft"></span>Lyft</a>
+  </div>`;
+}
+
 function haversine(lat1, lon1, lat2, lon2){
   const R = 3958.8;
   const dLat = (lat2-lat1) * Math.PI/180;
@@ -2391,7 +2460,12 @@ function renderPlan(list, label){
       ? `${SLOT_BY_KEY[stop.slot].icon} ${SLOT_BY_KEY[stop.slot].label}`
       : `◉ Sight`;
     const leg = legs[i] != null
-      ? `<div class="plan-leg"><span class="leg-line"></span>${fmtDist(legs[i])}</div>` : '';
+      ? `<div class="plan-leg">
+          <span class="leg-line"></span>${fmtDist(legs[i])}
+          <button class="leg-ride" data-leg="${i}">Ride</button>
+        </div>
+        ${ridePickerHTML('leg-'+i, stop.lat, stop.lng, stop.name, {lat:dayPlan.stops[i-1].lat, lng:dayPlan.stops[i-1].lng})}`
+      : '';
     return `
       ${leg}
       <div class="plan-row">
@@ -2448,6 +2522,13 @@ function renderPlan(list, label){
     b.addEventListener('click', () => moveStop(+b.dataset.i, +b.dataset.dir)));
   list.querySelectorAll('.plan-x').forEach(b =>
     b.addEventListener('click', () => removeStop(+b.dataset.i)));
+  list.querySelectorAll('.leg-ride').forEach(b =>
+    b.addEventListener('click', () => {
+      const picker = document.getElementById(`ride-leg-${b.dataset.leg}`);
+      if(picker) picker.classList.toggle('open');
+    }));
+  list.querySelectorAll('.ride-opt').forEach(a =>
+    a.addEventListener('click', () => markHandoff()));
 
   updateCompass([]);
 }
@@ -2548,7 +2629,9 @@ function render(){
         <div class="card-actions">
           <a href="${mapUrl}" rel="noopener">Directions</a>
           ${callHtml}
+          <button class="card-actions-ride" data-id="${p.id}">Ride</button>
         </div>
+        ${ridePickerHTML(p.id, p.lat, p.lng, p.name, userLoc)}
       </div>
     `;
   }).join("");
@@ -2560,6 +2643,19 @@ function render(){
       const place = items.find(p => p.id === id) || pinnedStore[id];
       if(place) togglePin(place);
     });
+  });
+
+  list.querySelectorAll(".card-actions-ride").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const picker = document.getElementById(`ride-${btn.dataset.id}`);
+      if(picker) picker.classList.toggle("open");
+    });
+  });
+
+  list.querySelectorAll(".ride-opt").forEach(a => {
+    // Leaving for Uber/Lyft backgrounds the app the same way Maps does.
+    a.addEventListener("click", () => markHandoff());
   });
 
   list.querySelectorAll(".card-add").forEach(btn => {
@@ -2592,7 +2688,8 @@ function render(){
   // except the pin button and the action links, which do their own thing.
   list.querySelectorAll(".card").forEach(card => {
     card.addEventListener("click", (e) => {
-      if(e.target.closest(".card-pin") || e.target.closest(".card-add") || e.target.closest(".slot-picker")) return;
+      if(e.target.closest(".card-pin") || e.target.closest(".card-add") || e.target.closest(".slot-picker")
+         || e.target.closest(".card-actions-ride") || e.target.closest(".ride-picker")) return;
       markHandoff();
       if(e.target.closest("a")) return;
       window.location.href = card.dataset.map;
