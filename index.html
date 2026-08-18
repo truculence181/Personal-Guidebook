@@ -32,19 +32,24 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23141A1F'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23F2F5F7' stroke-width='2'/%3E%3Cpath d='M50 28 L58 50 L50 72 L42 50 Z' fill='%232E7D93'/%3E%3C/svg%3E">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <script>
-// Runs before first paint so there's no flash of the wrong theme.
-// Modes: 'auto' (follow OS), 'light', 'dark'.
+// Runs before first paint so there's no flash of the wrong theme or skin.
+// Theme modes: 'auto' (follow OS), 'light', 'dark'. Skin: 'classic', '8bit'.
 (function(){
-  var mode = null;
-  try{ mode = localStorage.getItem('afield-theme'); }catch(e){}
+  var mode = null, skin = null;
+  try{
+    mode = localStorage.getItem('afield-theme');
+    skin = localStorage.getItem('afield-skin');
+  }catch(e){}
   if(!mode) mode = 'auto';
+  if(skin !== '8bit') skin = 'classic';
   var dark = mode === 'dark' ||
     (mode === 'auto' && window.matchMedia &&
      window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
   document.documentElement.setAttribute('data-theme-mode', mode);
+  document.documentElement.setAttribute('data-skin', skin);
 })();
 </script>
 <style>
@@ -70,6 +75,10 @@
     --shadow-sm:0 3px 10px rgba(16,28,38,0.07), 0 1px 2px rgba(16,28,38,0.05);
     --shadow-md:0 10px 24px rgba(16,28,38,0.11), 0 2px 6px rgba(16,28,38,0.05);
     --shadow-lg:0 24px 48px rgba(16,28,38,0.17), 0 8px 16px rgba(16,28,38,0.07);
+    --font-display:'Fraunces', serif;
+    --font-body:'Inter', sans-serif;
+    --font-label:'JetBrains Mono', monospace;
+    --radius-none:0;
   }
   html[data-theme="dark"], body[data-theme="dark"]{
     --bg:#0E1418;
@@ -94,12 +103,106 @@
     --shadow-md:0 10px 24px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.35);
     --shadow-lg:0 24px 48px rgba(0,0,0,0.65), 0 8px 16px rgba(0,0,0,0.40);
   }
+
+  /* ---------- 8-BIT SKIN ----------
+     Same DOM, same component CSS — only the token values change. Fonts and
+     corners are skin-level (independent of light/dark); colors and shadows
+     are skin+mode combinations, same pattern as the classic skin above. */
+  [data-skin="8bit"]{
+    --font-display:'Press Start 2P', monospace;
+    --font-body:'VT323', monospace;
+    --font-label:'VT323', monospace;
+  }
+  /* Press Start 2P runs roughly 2x wider per character than Fraunces at the
+     same font-size — sized for its native ~8-16px pixel scale, not for
+     serif-heading sizes. Without this, the hero heading alone would overflow
+     a phone screen. */
+  [data-skin="8bit"] .hero h1{font-size:15px; line-height:1.7; letter-spacing:0;}
+  [data-skin="8bit"] .lock-title{font-size:13px; line-height:1.6;}
+  [data-skin="8bit"] .plan-date{font-size:11px;}
+  [data-skin="8bit"] .shared-date{font-size:12px;}
+  [data-skin="8bit"] .card-name{font-size:10px; line-height:1.7;}
+  [data-skin="8bit"] .lock-btn, [data-skin="8bit"] .locate-btn,
+  [data-skin="8bit"] .bio-btn, [data-skin="8bit"] .search-row button{font-size:10px; letter-spacing:.03em;}
+  /* Hard-pixel corners everywhere, in one rule, rather than touching every
+     component's border-radius individually — the whole point of doing this
+     CSS-only. Circles (pin buttons, the compass) become squares, which reads
+     as authentic RPG item-slot styling rather than a bug. */
+  [data-skin="8bit"] *, [data-skin="8bit"] *::before, [data-skin="8bit"] *::after{
+    border-radius:0 !important;
+  }
+  [data-skin="8bit"] .card,
+  [data-skin="8bit"] .plan-card,
+  [data-skin="8bit"] .chip,
+  [data-skin="8bit"] .locate-btn,
+  [data-skin="8bit"] .lock-btn,
+  [data-skin="8bit"] .bio-btn,
+  [data-skin="8bit"] .pin-input,
+  [data-skin="8bit"] #catSelect,
+  [data-skin="8bit"] .search-row input,
+  [data-skin="8bit"] .search-row button,
+  [data-skin="8bit"] .compass,
+  [data-skin="8bit"] .shared-stop{
+    border-width:2px;
+  }
+  [data-skin="8bit"] .section-label,
+  [data-skin="8bit"] .card-cat,
+  [data-skin="8bit"] .chip{
+    letter-spacing:.06em;
+  }
+
+  html[data-skin="8bit"][data-theme="dark"], body[data-skin="8bit"][data-theme="dark"]{
+    --bg:#0A0E27;
+    --surface:#151A3D;
+    --ink:#F0F0F0;
+    --ink-soft:#C8CEEF;
+    --ink-faint:#9AA3DE;
+    --accent:#FFD54A;
+    --accent-deep:#FFE28A;
+    --line:#6B7EF0;
+    --rust:#FF7A8A;
+    --good:#5EE89A;
+    --glass:rgba(21,26,61,0.9);
+    --glass-ink:#F0F0F0;
+    --cover-outdoors:linear-gradient(135deg,#1A3D2E,#0F2419);
+    --cover-food:linear-gradient(135deg,#3D2E1A,#241909);
+    --cover-nightlife:linear-gradient(135deg,#2E1A3D,#190924);
+    --cover-culture:linear-gradient(135deg,#1A2A3D,#091624);
+    --cover-icon:rgba(240,240,240,0.35);
+    --shadow-xs:2px 2px 0 #05071a;
+    --shadow-sm:3px 3px 0 #05071a;
+    --shadow-md:4px 4px 0 #05071a;
+    --shadow-lg:6px 6px 0 #05071a;
+  }
+  html[data-skin="8bit"][data-theme="light"], body[data-skin="8bit"][data-theme="light"]{
+    --bg:#E8DCC0;
+    --surface:#F5ECD6;
+    --ink:#2B2015;
+    --ink-soft:#5C4A30;
+    --ink-faint:#6E5A3E;
+    --accent:#8A5D06;
+    --accent-deep:#6B4A05;
+    --line:#8A6D3A;
+    --rust:#A33A2A;
+    --good:#2E6B3A;
+    --glass:rgba(245,236,214,0.92);
+    --glass-ink:#2B2015;
+    --cover-outdoors:linear-gradient(135deg,#D8CFA0,#B9C98A);
+    --cover-food:linear-gradient(135deg,#E4C9A0,#D4A96E);
+    --cover-nightlife:linear-gradient(135deg,#D9C4D4,#B896B0);
+    --cover-culture:linear-gradient(135deg,#C4CFD9,#94ACC2);
+    --cover-icon:rgba(43,32,21,0.38);
+    --shadow-xs:2px 2px 0 #4a3a20;
+    --shadow-sm:3px 3px 0 #4a3a20;
+    --shadow-md:4px 4px 0 #4a3a20;
+    --shadow-lg:6px 6px 0 #4a3a20;
+  }
   html{background:var(--bg);}
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
     background:var(--bg);
     color:var(--ink);
-    font-family:'Inter', sans-serif;
+    font-family:var(--font-body);
     min-height:100vh;
     padding-bottom:60px;
     -webkit-font-smoothing:antialiased;
@@ -158,7 +261,7 @@
   .theme-btn:active{transform:scale(0.9);}
 
   .eyebrow{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11px;
     letter-spacing:0.14em;
     text-transform:uppercase;
@@ -169,7 +272,7 @@
   @keyframes pulse{0%,100%{opacity:1} 50%{opacity:.25}}
 
   .hero h1{
-    font-family:'Fraunces', serif;
+    font-family:var(--font-display);
     font-weight:600;
     font-size:34px;
     line-height:1.05;
@@ -189,14 +292,14 @@
     border-top:1px solid var(--line);
   }
   .coords{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11.5px;
     color:var(--ink-faint);
     line-height:1.6;
   }
   .coords span{color:var(--ink);}
   .source-note{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10.5px;
     color:var(--ink-faint);
     margin-top:2px;
@@ -234,7 +337,7 @@
   }
   .compass-label{
     position:absolute; bottom:-18px; left:50%; transform:translateX(-50%);
-    font-family:'JetBrains Mono', monospace; font-size:8.5px; letter-spacing:.05em;
+    font-family:var(--font-label); font-size:8.5px; letter-spacing:.05em;
     color:var(--ink-faint); white-space:nowrap;
   }
 
@@ -245,7 +348,7 @@
     background:var(--ink);
     color:var(--bg);
     border:none;
-    font-family:'Inter', sans-serif;
+    font-family:var(--font-body);
     font-weight:600;
     font-size:14.5px;
     padding:14px 16px;
@@ -269,7 +372,7 @@
     border:1px solid var(--line);
     border-radius:12px;
     padding:12px 14px;
-    font-family:'Inter', sans-serif;
+    font-family:var(--font-body);
     font-size:14px;
     color:var(--ink);
     box-shadow:var(--shadow-xs);
@@ -280,7 +383,7 @@
     background:var(--surface);
     border:1px solid var(--line);
     color:var(--accent-deep);
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-weight:500;
     font-size:12.5px;
     padding:0 16px;
@@ -294,14 +397,14 @@
   .search-row button:active{transform:scale(0.97);}
   .search-row button:disabled{opacity:.5; cursor:default;}
   .search-hint{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10.5px;
     color:var(--ink-faint);
     margin-top:8px;
   }
 
   .status-line{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11.5px;
     color:var(--ink-soft);
     text-align:center;
@@ -316,7 +419,7 @@
   }
   .chips::-webkit-scrollbar{display:none;}
   .chip{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11.5px;
     letter-spacing:.03em;
     white-space:nowrap;
@@ -365,7 +468,7 @@
     border:1px solid var(--line);
     border-radius:20px;
     padding:8px 30px 8px 14px;
-    font-family:'Inter', sans-serif;
+    font-family:var(--font-body);
     font-size:13px;
     font-weight:500;
     color:var(--ink);
@@ -388,7 +491,7 @@
     align-items:center;
   }
   .radius-label{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10px; letter-spacing:.1em; text-transform:uppercase;
     color:var(--ink-faint);
     flex-shrink:0;
@@ -397,7 +500,7 @@
   .radius-chip{padding:6px 12px; font-size:11px;}
 
   .surprise{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11.5px;
     color:var(--accent-deep);
     background:none; border:none;
@@ -419,7 +522,7 @@
     flex-shrink:0;
   }
   .page-size label{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10px; letter-spacing:.1em; text-transform:uppercase;
     color:var(--ink-faint);
   }
@@ -429,7 +532,7 @@
     border:1px solid var(--line);
     border-radius:8px;
     padding:5px 22px 5px 9px;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11.5px;
     color:var(--ink);
     cursor:pointer;
@@ -469,11 +572,11 @@
     display:flex; flex-direction:column; gap:2px;
   }
   .pager-range{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:12px; color:var(--ink);
   }
   .pager-page{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10px; color:var(--ink-faint);
   }
   .pager .pager-range:only-child{color:var(--ink-faint); font-size:11px;}
@@ -481,7 +584,7 @@
   .section-label{
     display:flex; align-items:center; gap:10px;
     margin:28px 0 14px;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11px; letter-spacing:.12em; text-transform:uppercase;
     color:var(--ink-faint);
   }
@@ -544,20 +647,20 @@
     border-radius:20px;
     padding:4px 10px;
     display:flex; align-items:center; gap:4px;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11px; font-weight:500;
     box-shadow:var(--shadow-xs);
   }
 
   .card-body{padding:14px 16px 12px;}
   .card-name{
-    font-family:'Fraunces', serif;
+    font-family:var(--font-display);
     font-weight:600;
     font-size:18px;
     line-height:1.2;
   }
   .card-cat{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10px;
     letter-spacing:.08em;
     text-transform:uppercase;
@@ -573,7 +676,7 @@
   .card-hours{
     display:flex; align-items:baseline; gap:8px;
     padding:0 16px 12px;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:12px;
   }
   .hours-day{
@@ -586,7 +689,7 @@
     display:flex; justify-content:space-between; align-items:center;
     padding:11px 16px;
     border-top:1px solid var(--line);
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11.5px;
   }
   .status-open{color:var(--good); font-weight:500;}
@@ -601,7 +704,7 @@
     flex:1;
     text-align:center;
     padding:11px 0;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11px;
     letter-spacing:.04em;
     text-transform:uppercase;
@@ -624,7 +727,7 @@
     flex:1;
     display:flex; align-items:center; justify-content:center; gap:6px;
     padding:11px 0;
-    font-family:'Inter', sans-serif;
+    font-family:var(--font-body);
     font-size:12.5px; font-weight:600;
     text-decoration:none;
     color:var(--ink);
@@ -642,7 +745,7 @@
     border-radius:10px;
     padding:2px 9px;
     margin-left:auto;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:9.5px; letter-spacing:.05em; text-transform:uppercase;
     color:var(--ink-soft);
     cursor:pointer;
@@ -676,7 +779,7 @@
   .slot-picker.open{display:flex;}
   .slot-row{display:flex; gap:6px; flex-wrap:wrap;}
   .drawer-label{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:9.5px; letter-spacing:.11em; text-transform:uppercase;
     color:var(--ink-faint);
     margin-top:6px;
@@ -705,7 +808,7 @@
   .plan-place .card-marks{padding:4px 0 0;}
 
   .slot-opt{
-    font-family:'Inter', sans-serif;
+    font-family:var(--font-body);
     font-size:12px; font-weight:500;
     padding:7px 11px;
     border-radius:9px;
@@ -730,15 +833,15 @@
     padding:16px;
     border-bottom:1px solid var(--line);
   }
-  .plan-date{font-family:'Fraunces', serif; font-weight:600; font-size:18px;}
+  .plan-date{font-family:var(--font-display); font-weight:600; font-size:18px;}
   .plan-sub{
-    font-family:'JetBrains Mono', monospace; font-size:11px;
+    font-family:var(--font-label); font-size:11px;
     color:var(--ink-faint); margin-top:3px;
   }
   .plan-datepick{
     background:var(--bg); border:1px solid var(--line);
     border-radius:9px; padding:7px 9px;
-    font-family:'JetBrains Mono', monospace; font-size:11.5px;
+    font-family:var(--font-label); font-size:11.5px;
     color:var(--ink);
   }
   .plan-row{
@@ -748,7 +851,7 @@
   }
   .plan-row:last-of-type{border-bottom:none;}
   .plan-time{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11px; letter-spacing:.04em;
     color:var(--ink-soft);
     width:96px; flex-shrink:0;
@@ -761,7 +864,7 @@
   .plan-place.muted{color:var(--ink-faint); font-size:13px; font-style:italic;}
   .plan-warn{
     display:block; margin-top:3px;
-    font-family:'JetBrains Mono', monospace; font-size:10.5px;
+    font-family:var(--font-label); font-size:10.5px;
     color:var(--rust);
   }
   .plan-x{
@@ -772,7 +875,7 @@
   .plan-x:active{color:var(--rust);}
   .plan-divider{
     padding:10px 16px 6px;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10px; letter-spacing:.12em; text-transform:uppercase;
     color:var(--ink-faint);
     background:var(--bg);
@@ -781,7 +884,7 @@
   .plan-leg{
     display:flex; align-items:center; gap:8px;
     padding:0 16px 0 22px;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10px;
     color:var(--ink-faint);
     height:22px;
@@ -805,7 +908,7 @@
   .plan-mv:active:not(:disabled){color:var(--accent);}
   .plan-missing{
     padding:12px 16px;
-    font-family:'JetBrains Mono', monospace; font-size:11px;
+    font-family:var(--font-label); font-size:11px;
     color:var(--ink-faint);
     border-top:1px solid var(--line);
   }
@@ -814,7 +917,7 @@
     background:var(--bg); border:none;
     border-top:1px solid var(--line);
     padding:12px;
-    font-family:'JetBrains Mono', monospace; font-size:11px;
+    font-family:var(--font-label); font-size:11px;
     letter-spacing:.04em; text-transform:uppercase;
     color:var(--accent-deep);
     cursor:pointer;
@@ -826,7 +929,7 @@
     background:none; border:none;
     border-top:1px solid var(--line);
     padding:12px;
-    font-family:'JetBrains Mono', monospace; font-size:11px;
+    font-family:var(--font-label); font-size:11px;
     letter-spacing:.04em; text-transform:uppercase;
     color:var(--ink-faint);
     cursor:pointer;
@@ -838,7 +941,7 @@
     padding:44px 20px;
     color:var(--ink-faint);
     font-size:13.5px;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     background:var(--surface);
     border-radius:18px;
     box-shadow:var(--shadow-xs);
@@ -847,7 +950,7 @@
   footer{
     text-align:center;
     margin-top:34px;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10.5px;
     color:var(--ink-faint);
     letter-spacing:.04em;
@@ -867,7 +970,7 @@
   .shared-box{max-width:460px; margin:0 auto;}
   .shared-head{margin-bottom:18px;}
   .shared-date{
-    font-family:'Fraunces', serif; font-weight:600; font-size:26px;
+    font-family:var(--font-display); font-weight:600; font-size:26px;
     margin-top:8px;
   }
   .shared-stop{
@@ -880,7 +983,7 @@
     box-shadow:var(--shadow-xs);
   }
   .shared-badge{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10.5px; color:var(--ink-soft);
     white-space:nowrap; flex-shrink:0;
     padding-top:2px;
@@ -892,7 +995,7 @@
   .shared-actions{margin-top:18px; display:flex; flex-direction:column; gap:10px;}
   .shared-note{
     margin-top:16px;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10.5px; color:var(--ink-faint);
     line-height:1.5; text-align:center;
   }
@@ -905,7 +1008,7 @@
     margin:0 16px 12px;
     width:calc(100% - 32px);
     border-radius:11px;
-    font-family:'Inter', sans-serif; font-size:13.5px; font-weight:600;
+    font-family:var(--font-body); font-size:13.5px; font-weight:600;
     cursor:pointer;
   }
   .plan-share:active{transform:scale(0.98);}
@@ -930,15 +1033,15 @@
     background:linear-gradient(to top, var(--rust), var(--accent));
     border-radius:2px;
   }
-  .lock-title{font-family:'Fraunces', serif; font-weight:600; font-size:23px; margin-bottom:6px; color:var(--ink);}
-  .lock-sub{font-family:'Inter', sans-serif; font-size:13px; color:var(--ink-soft); margin-bottom:22px; line-height:1.5;}
+  .lock-title{font-family:var(--font-display); font-weight:600; font-size:23px; margin-bottom:6px; color:var(--ink);}
+  .lock-sub{font-family:var(--font-body); font-size:13px; color:var(--ink-soft); margin-bottom:22px; line-height:1.5;}
   .pin-input{
     width:100%;
     background:var(--surface);
     border:1px solid var(--line);
     border-radius:12px;
     padding:14px;
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:20px;
     letter-spacing:.3em;
     text-align:center;
@@ -952,7 +1055,7 @@
     background:var(--ink);
     color:var(--bg);
     border:none;
-    font-family:'Inter', sans-serif;
+    font-family:var(--font-body);
     font-weight:600;
     font-size:14.5px;
     padding:14px;
@@ -964,7 +1067,7 @@
   }
   .lock-btn:active{transform:scale(0.98);}
   .lock-error{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:11.5px;
     color:var(--rust);
     min-height:16px;
@@ -975,7 +1078,7 @@
     background:var(--surface);
     color:var(--accent-deep);
     border:1px solid var(--line);
-    font-family:'Inter', sans-serif;
+    font-family:var(--font-body);
     font-weight:600;
     font-size:14px;
     padding:13px;
@@ -1003,7 +1106,7 @@
   .bio-copy span{font-size:12.5px; color:var(--ink-soft); line-height:1.45;}
   .bio-actions{display:flex; gap:8px;}
   .bio-actions button{
-    font-family:'Inter', sans-serif;
+    font-family:var(--font-body);
     font-size:13px; font-weight:600;
     padding:9px 14px;
     border-radius:10px;
@@ -1017,7 +1120,7 @@
   .bio-done{font-size:13px; color:var(--good); font-weight:500;}
 
   .lock-reset{
-    font-family:'JetBrains Mono', monospace;
+    font-family:var(--font-label);
     font-size:10.5px;
     color:var(--ink-faint);
     background:none; border:none;
@@ -1078,6 +1181,7 @@
       <div class="eyebrow"><span class="dot"></span>LIVE FIELD GUIDE</div>
       <div class="head-btns">
         <button class="theme-btn" id="bioToggle" title="Face ID" aria-label="Face ID" style="display:none;">☺</button>
+        <button class="theme-btn" id="skinBtn" title="Switch skin" aria-label="Switch skin">▦</button>
         <button class="theme-btn" id="themeBtn" title="Switch theme" aria-label="Switch theme"></button>
       </div>
     </div>
@@ -1542,6 +1646,42 @@ const THEME_LABEL = {auto:'Following system theme', light:'Light theme', dark:'D
 const themeBtn = document.getElementById('themeBtn');
 const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
+/* ---------- skin ----------
+   Independent of light/dark: classic (the app's normal look) or 8bit (retro
+   RPG treatment). Same DOM and render logic either way — this only swaps
+   which token block is active, which is the entire point of having kept
+   every component on CSS variables rather than hardcoded colors. */
+const SKIN_ICON = {classic:'▦', '8bit':'▧'};
+const SKIN_LABEL = {classic:'Classic look — tap for 8-bit', '8bit':'8-bit look — tap for classic'};
+const skinBtn = document.getElementById('skinBtn');
+
+function currentSkin(){
+  return document.documentElement.getAttribute('data-skin') || 'classic';
+}
+function applySkin(skin){
+  document.documentElement.setAttribute('data-skin', skin);
+  if(document.body) document.body.setAttribute('data-skin', skin);
+  skinBtn.textContent = SKIN_ICON[skin];
+  skinBtn.title = SKIN_LABEL[skin];
+  skinBtn.classList.toggle('on', skin === '8bit');
+  try{ localStorage.setItem('afield-skin', skin); }catch(e){}
+  syncThemeColorMeta();
+}
+skinBtn.addEventListener('click', () => {
+  applySkin(currentSkin() === '8bit' ? 'classic' : '8bit');
+});
+applySkin(currentSkin());
+
+function syncThemeColorMeta(){
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const skin = currentSkin();
+  const colors = {
+    'classic-light':'#F2F5F7', 'classic-dark':'#0E1418',
+    '8bit-light':'#E8DCC0', '8bit-dark':'#0A0E27'
+  };
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute('content', colors[`${skin}-${dark ? 'dark' : 'light'}`]);
+}
 function applyTheme(mode){
   const dark = mode === 'dark' || (mode === 'auto' && darkQuery && darkQuery.matches);
   const theme = dark ? 'dark' : 'light';
@@ -1552,9 +1692,7 @@ function applyTheme(mode){
   if(document.body) document.body.setAttribute('data-theme', theme);
   themeBtn.textContent = THEME_ICON[mode];
   themeBtn.title = THEME_LABEL[mode];
-  // Keep the browser/status bar chrome in step with the theme.
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if(meta) meta.setAttribute('content', dark ? '#0E1418' : '#F2F5F7');
+  syncThemeColorMeta();
   try{ localStorage.setItem('afield-theme', mode); }catch(e){}
 }
 function currentMode(){
