@@ -2424,7 +2424,6 @@ async function fetchWeather(points){
   const lon = points.map(p => p.lng).join(',');
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
             + `&hourly=temperature_2m,weathercode,weather_code,precipitation_probability`
-            + `&current=temperature_2m,weathercode,weather_code`
             + `&temperature_unit=fahrenheit&timezone=auto&forecast_days=16`;
   const t = withTimeout(null, 8000);
   try{
@@ -3470,16 +3469,35 @@ async function ensurePlanWeather(){
 }
 
 /* ---------- header weather badge ---------- */
+// Finds the hourly entry closest to a target moment in absolute time —
+// safer than matching by hour-of-day, which breaks if the searched
+// location's timezone differs from the browser's.
+function closestHourlyIndex(times, targetMs){
+  let idx = 0, best = Infinity;
+  times.forEach((t, i) => {
+    const diff = Math.abs(new Date(t).getTime() - targetMs);
+    if(diff < best){ best = diff; idx = i; }
+  });
+  return idx;
+}
+
 async function refreshHeaderWeather(lat, lng){
   const el = document.getElementById('headerWeather');
   try{
     const results = await fetchWeather([{lat, lng}]);
     const r = results[0];
-    const temp = r && r.current ? r.current.temperature_2m : null;
-    const codeArr = r && r.current ? (r.current.weather_code ?? r.current.weathercode) : null;
-    if(temp == null || codeArr == null){ el.style.display = 'none'; return; }
-    el.innerHTML = `${weatherIcon(codeArr)} ${Math.round(temp)}°`;
-    el.title = weatherLabel(codeArr);
+    // The day plan's per-stop weather already confirmed the hourly data
+    // parses correctly — reuse that path rather than the separate
+    // `current` block, whose exact field shape wasn't reliably verifiable
+    // from this sandbox and evidently doesn't match what the live API sends.
+    if(!r || !r.hourly || !r.hourly.time){ el.style.display = 'none'; return; }
+    const idx = closestHourlyIndex(r.hourly.time, Date.now());
+    const codeArr = Array.isArray(r.hourly.weather_code) ? r.hourly.weather_code : r.hourly.weathercode;
+    const temp = r.hourly.temperature_2m ? r.hourly.temperature_2m[idx] : null;
+    const code = codeArr ? codeArr[idx] : null;
+    if(temp == null || code == null){ el.style.display = 'none'; return; }
+    el.innerHTML = `${weatherIcon(code)} ${Math.round(temp)}°`;
+    el.title = weatherLabel(code);
     el.style.display = 'block';
   }catch(err){
     console.warn('Header weather failed:', err);
