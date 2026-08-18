@@ -1,8 +1,8 @@
-# Personal Guidebook
+# Vagatio
 
 A live field guide to what's worth wandering to near you.
 
-Afield finds parks, trails, cafes, bars, museums, and viewpoints around your
+Vagatio finds parks, trails, cafes, bars, museums, and viewpoints around your
 current location — or around anywhere you're planning to go — and tells you
 what's actually open right now. It runs entirely in your browser. There is no
 account, no server, and no tracking.
@@ -11,7 +11,7 @@ account, no server, and no tracking.
 
 ## What it does
 
-**Finds what's nearby.** Tap the locate button and Afield queries live map data
+**Finds what's nearby.** Tap the locate button and Vagatio queries live map data
 at your exact coordinates, sorted closest-first.
 
 **Plans ahead.** Type any city or address to browse spots there before you
@@ -35,7 +35,7 @@ sessions and are encrypted on your device.
 
 ## Privacy
 
-Afield has no backend. Nothing you do is uploaded anywhere.
+Vagatio has no backend. Nothing you do is uploaded anywhere.
 
 - **Your location** is read by your browser and used to build map queries. It
   is never stored or transmitted to any server run by this app.
@@ -76,7 +76,7 @@ unreachable, it falls back to a small built-in set of places and says so.
 
 ## Running it
 
-Afield must be served over **HTTPS** or from **localhost**. Opening the HTML
+Vagatio must be served over **HTTPS** or from **localhost**. Opening the HTML
 file directly (`file://`) breaks geolocation, the encrypted PIN vault, and
 home-screen installation.
 

@@ -1,6 +1,6 @@
 {
-  "name": "Afield — Local Explorer",
-  "short_name": "Afield",
+  "name": "Vagatio — Local Explorer",
+  "short_name": "Vagatio",
   "description": "A live field guide to what's worth wandering to nearby.",
   "start_url": "./",
   "display": "standalone",
