@@ -1120,6 +1120,49 @@
   }
   .plan-share:active{transform:scale(0.98);}
 
+  .plan-save-fav{
+    width:calc(100% - 32px);
+    background:var(--surface); color:var(--ink);
+    border:1px solid var(--line);
+    padding:12px;
+    margin:0 16px 12px;
+    border-radius:11px;
+    font-family:var(--font-body); font-size:13.5px; font-weight:600;
+    cursor:pointer;
+  }
+  .plan-save-fav:active{transform:scale(0.98); background:var(--bg);}
+
+  .saved-card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:16px;
+    box-shadow:var(--shadow-sm);
+    padding:14px 16px;
+    margin-bottom:14px;
+  }
+  .saved-name{
+    font-family:var(--font-display); font-weight:600; font-size:16px;
+    margin-bottom:4px;
+  }
+  .saved-meta{
+    font-family:var(--font-label); font-size:11.5px;
+    color:var(--ink-faint);
+    line-height:1.5;
+    margin-bottom:12px;
+  }
+  .saved-actions{display:flex; gap:8px;}
+  .saved-actions button{
+    flex:1;
+    padding:9px 0;
+    border-radius:10px;
+    font-family:var(--font-body); font-size:13px; font-weight:600;
+    cursor:pointer;
+  }
+  .saved-load{background:var(--ink); color:var(--bg); border:none;}
+  .saved-load:active{transform:scale(0.97);}
+  .saved-del{background:var(--surface); color:var(--rust); border:1px solid var(--line);}
+  .saved-del:active{background:var(--bg);}
+
   #lockScreen{
     position:fixed; inset:0;
     background:var(--bg);
@@ -1332,6 +1375,7 @@
     <div class="filter-bar">
       <button class="chip pin-chip" id="viewPinned">★ Pinned</button>
       <button class="chip plan-chip" id="viewPlan">◷ Day plan</button>
+      <button class="chip saved-chip" id="viewSaved">❖ Saved</button>
       <span class="chip-divider"></span>
       <div class="select-wrap">
         <select id="catSelect" aria-label="Category">
@@ -1535,6 +1579,58 @@ function emptyPlan(){
   return {date: iso, stops: []};
 }
 let dayPlan = emptyPlan();
+
+/* ---------- saved plans ----------
+   A day plan you actually loved doesn't have to be reinvented next time —
+   save the sequence of stops as a named favorite, independent of any
+   specific date, and load it back into a fresh day whenever you want to
+   repeat it. */
+let savedPlans = [];  // [{id, name, savedAt, stops: [...]}]
+function genId(prefix){
+  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+function saveCurrentPlanAsFavorite(){
+  if(planCount() === 0) return;
+  const name = prompt('Name this plan, e.g. "Perfect Saturday downtown":', '');
+  if(name === null) return;
+  const trimmed = name.trim();
+  if(!trimmed) return;
+  savedPlans.unshift({
+    id: genId('sp'),
+    name: trimmed,
+    savedAt: dayPlan.date,
+    stops: dayPlan.stops.map(s => Object.assign({}, s))
+  });
+  savePins();
+  render();
+}
+function loadSavedPlan(id){
+  const sp = savedPlans.find(x => x.id === id);
+  if(!sp) return;
+  const apply = () => {
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    // Reusing a favorite means today, not the date it was originally saved.
+    dayPlan = {date: iso, stops: sp.stops.map(s => Object.assign({}, s))};
+    savePins();
+    activeView = 'plan';
+    syncControls();
+    render();
+  };
+  if(planCount() > 0){
+    if(confirm(`Replace your current day plan with "${sp.name}"? This can't be undone.`)) apply();
+  } else {
+    apply();
+  }
+}
+function deleteSavedPlan(id){
+  const sp = savedPlans.find(x => x.id === id);
+  if(!sp) return;
+  if(!confirm(`Delete "${sp.name}"? This can't be undone.`)) return;
+  savedPlans = savedPlans.filter(x => x.id !== id);
+  savePins();
+  render();
+}
 
 /* ---------- your ratings & price ----------
    Open map data carries no ratings or price fields, so these are yours:
@@ -2347,13 +2443,14 @@ async function unwrapDEK(key, payload){
 // The vault holds both pins and the day plan. Older installs stored a bare
 // pins object, so unpack handles either shape.
 function vaultPayload(){
-  return {__v: 4, pins: pinnedStore, plan: dayPlan, marks: myMarks, journal: journalStore};
+  return {__v: 5, pins: pinnedStore, plan: dayPlan, marks: myMarks, journal: journalStore, savedPlans: savedPlans};
 }
 function unpackVault(obj){
   if(obj && obj.__v >= 2){
     pinnedStore = obj.pins || {};
     myMarks = obj.marks || {};
     journalStore = obj.journal || {};
+    savedPlans = Array.isArray(obj.savedPlans) ? obj.savedPlans : [];
     dayPlan = Object.assign(emptyPlan(), obj.plan || {});
     // Migrate the earlier plan shape (separate meal keys + sights array)
     // into the ordered stops list.
@@ -2369,6 +2466,7 @@ function unpackVault(obj){
     pinnedStore = obj || {};
     myMarks = {};
     journalStore = {};
+    savedPlans = [];
     dayPlan = emptyPlan();
   }
   pinnedIds = new Set(Object.keys(pinnedStore));
@@ -2391,7 +2489,13 @@ function togglePin(place){
     pinnedStore[place.id] = clean;
   }
   savePins();
+  updatePinBadge();
   render();
+}
+function updatePinBadge(){
+  const n = Object.keys(pinnedStore).length;
+  const btn = document.getElementById('viewPinned');
+  if(btn) btn.textContent = n ? `★ Pinned · ${n}` : '★ Pinned';
 }
 
 /* ---------- Face ID / Touch ID via WebAuthn PRF ---------- */
@@ -2565,6 +2669,7 @@ function hasVault(){ return !!localStorage.getItem(VAULT_KEY); }
 function enterApp(){
   lockScreen.classList.add('hidden');
   appContent.style.display = '';
+  updatePinBadge();
   render();
   maybeOfferBio();
   applyPendingImport();
@@ -2830,6 +2935,38 @@ function slotPickerHTML(p){
   </div>`;
 }
 
+function renderSaved(list, label){
+  label.textContent = "Saved plans";
+  document.getElementById("pager").innerHTML = '';
+  document.querySelector(".page-size").style.display = 'none';
+
+  if(!savedPlans.length){
+    list.innerHTML = '<div class="empty">Nothing saved yet — build a day plan you love, then tap "Save this plan" to reuse it later.</div>';
+    updateCompass([]);
+    return;
+  }
+
+  list.innerHTML = savedPlans.map(sp => {
+    const preview = sp.stops.map(s => s.name).slice(0, 3).join(' · ')
+      + (sp.stops.length > 3 ? ` +${sp.stops.length - 3} more` : '');
+    return `<div class="saved-card">
+      <div class="saved-name">${escapeHtml(sp.name)}</div>
+      <div class="saved-meta">${sp.stops.length} stop${sp.stops.length===1?'':'s'} · ${escapeHtml(preview)}</div>
+      <div class="saved-actions">
+        <button class="saved-load" data-id="${sp.id}">Use this plan</button>
+        <button class="saved-del" data-id="${sp.id}">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.saved-load').forEach(b =>
+    b.addEventListener('click', () => loadSavedPlan(b.dataset.id)));
+  list.querySelectorAll('.saved-del').forEach(b =>
+    b.addEventListener('click', () => deleteSavedPlan(b.dataset.id)));
+
+  updateCompass([]);
+}
+
 function renderPlan(list, label){
   label.textContent = "Day plan";
   // The plan is a single itinerary, not a paged list.
@@ -2891,6 +3028,7 @@ function renderPlan(list, label){
         <input type="date" id="planDate" value="${dayPlan.date}" class="plan-datepick">
       </div>
       ${planCount() ? '<button class="plan-share" id="planShare">↗ Share with your group</button>' : ''}
+      ${planCount() ? '<button class="plan-save-fav" id="planSaveFav">☆ Save this plan for later</button>' : ''}
       ${rows}
       ${missingNote}
       ${planCount() > 2 ? '<button class="plan-opt" id="planOpt">↯ Reorder to cut travel</button>' : ''}
@@ -2905,6 +3043,8 @@ function renderPlan(list, label){
   if(po) po.addEventListener('click', optimizePlan);
   const ps = document.getElementById('planShare');
   if(ps) ps.addEventListener('click', sharePlan);
+  const psf = document.getElementById('planSaveFav');
+  if(psf) psf.addEventListener('click', saveCurrentPlanAsFavorite);
   const pc = document.getElementById('planClear');
   if(pc) pc.addEventListener('click', () => {
     if(confirm('Clear every stop from this day?')) clearPlan();
@@ -2941,6 +3081,11 @@ function render(){
 
   if(activeView === "plan"){
     renderPlan(list, label);
+    return;
+  }
+
+  if(activeView === "saved"){
+    renderSaved(list, label);
     return;
   }
 
@@ -3031,6 +3176,11 @@ function render(){
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const id = btn.dataset.id;
+      // If this card's drawer is open, keep it open through the re-render —
+      // otherwise pinning silently closes it instead of revealing the
+      // journal section that just became available.
+      const picker = btn.closest(".card").querySelector(".slot-picker");
+      if(picker && picker.classList.contains("open")) openDrawerId = id;
       const place = items.find(p => p.id === id) || pinnedStore[id];
       if(place) togglePin(place);
     });
@@ -3452,17 +3602,19 @@ CATEGORIES.forEach(cat => {
 
 const viewPinned = document.getElementById("viewPinned");
 const viewPlan = document.getElementById("viewPlan");
+const viewSaved = document.getElementById("viewSaved");
 const openNowBtn = document.getElementById("openNow");
 
 function syncControls(){
   viewPinned.classList.toggle("active", activeView === "pinned");
   viewPlan.classList.toggle("active", activeView === "plan");
+  viewSaved.classList.toggle("active", activeView === "saved");
   openNowBtn.classList.toggle("active", openOnly);
   catSelect.value = activeCat;
   // Category and distance don't apply to the saved lists, so dim them there.
   const browsing = activeView === "browse";
   catSelect.disabled = !browsing;
-  openNowBtn.disabled = activeView === "plan";
+  openNowBtn.disabled = activeView === "plan" || activeView === "saved";
   document.getElementById("radiusChips").style.opacity = browsing ? "" : ".4";
   document.querySelector(".select-wrap").style.opacity = browsing ? "" : ".4";
 }
@@ -3475,6 +3627,7 @@ function setView(v){
 }
 viewPinned.addEventListener("click", () => setView("pinned"));
 viewPlan.addEventListener("click", () => setView("plan"));
+viewSaved.addEventListener("click", () => setView("saved"));
 openNowBtn.addEventListener("click", () => {
   if(activeView === "plan") return;
   openOnly = !openOnly;
