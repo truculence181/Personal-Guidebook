@@ -11,7 +11,7 @@
   default-src 'none';
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src https://fonts.gstatic.com;
-  connect-src https://nominatim.openstreetmap.org https://overpass-api.de https://overpass.kumi.systems https://overpass.openstreetmap.ru https://*.wikipedia.org;
+  connect-src https://nominatim.openstreetmap.org https://overpass-api.de https://overpass.kumi.systems https://overpass.openstreetmap.ru https://*.wikipedia.org https://www.wikidata.org;
   img-src 'self' data: https:;
   script-src 'self' 'unsafe-inline';
   frame-ancestors 'none';
@@ -32,7 +32,7 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23141A1F'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23F2F5F7' stroke-width='2'/%3E%3Cpath d='M50 28 L58 50 L50 72 L42 50 Z' fill='%232E7D93'/%3E%3C/svg%3E">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Runs before first paint so there's no flash of the wrong theme or skin.
 // Theme modes: 'auto' (follow OS), 'light', 'dark'. Skin: 'classic', '8bit'.
@@ -104,32 +104,29 @@
     --shadow-lg:0 24px 48px rgba(0,0,0,0.65), 0 8px 16px rgba(0,0,0,0.40);
   }
 
-  /* ---------- 8-BIT SKIN ----------
-     Same DOM, same component CSS — only the token values change. Fonts and
-     corners are skin-level (independent of light/dark); colors and shadows
-     are skin+mode combinations, same pattern as the classic skin above. */
+  /* ---------- 8-BIT SKIN (Stardew-inspired) ----------
+     One consistent rounded pixel font at varying weight — matching how
+     Stardew actually uses a single typeface throughout rather than mixing
+     an arcade display font with a separate body font. Warm, soft-cornered,
+     wood-and-parchment palette instead of a moody dungeon-crawler one. */
   [data-skin="8bit"]{
-    --font-display:'Press Start 2P', monospace;
-    --font-body:'VT323', monospace;
-    --font-label:'VT323', monospace;
+    --font-display:'Pixelify Sans', sans-serif;
+    --font-body:'Pixelify Sans', sans-serif;
+    --font-label:'Pixelify Sans', sans-serif;
   }
-  /* Press Start 2P runs roughly 2x wider per character than Fraunces at the
-     same font-size — sized for its native ~8-16px pixel scale, not for
-     serif-heading sizes. Without this, the hero heading alone would overflow
-     a phone screen. */
-  [data-skin="8bit"] .hero h1{font-size:15px; line-height:1.7; letter-spacing:0;}
-  [data-skin="8bit"] .lock-title{font-size:13px; line-height:1.6;}
-  [data-skin="8bit"] .plan-date{font-size:11px;}
-  [data-skin="8bit"] .shared-date{font-size:12px;}
-  [data-skin="8bit"] .card-name{font-size:10px; line-height:1.7;}
-  [data-skin="8bit"] .lock-btn, [data-skin="8bit"] .locate-btn,
-  [data-skin="8bit"] .bio-btn, [data-skin="8bit"] .search-row button{font-size:10px; letter-spacing:.03em;}
-  /* Hard-pixel corners everywhere, in one rule, rather than touching every
-     component's border-radius individually — the whole point of doing this
-     CSS-only. Circles (pin buttons, the compass) become squares, which reads
-     as authentic RPG item-slot styling rather than a bug. */
+  [data-skin="8bit"] .hero h1{font-weight:600; font-size:26px; line-height:1.25;}
+  [data-skin="8bit"] .card-name{font-weight:600; font-size:16px;}
+  [data-skin="8bit"] .lock-title{font-weight:600; font-size:20px;}
+  [data-skin="8bit"] .plan-date{font-weight:600; font-size:16px;}
+  [data-skin="8bit"] .shared-date{font-weight:600; font-size:22px;}
+  /* Soft-rounded pixel corners — Stardew's boxes are chunky but not sharp —
+     plus thicker wood-grain borders on the load-bearing elements. */
   [data-skin="8bit"] *, [data-skin="8bit"] *::before, [data-skin="8bit"] *::after{
-    border-radius:0 !important;
+    border-radius:6px !important;
+  }
+  [data-skin="8bit"] .card-pin, [data-skin="8bit"] .card-add,
+  [data-skin="8bit"] .theme-btn, [data-skin="8bit"] .pager-btn{
+    border-radius:8px !important;
   }
   [data-skin="8bit"] .card,
   [data-skin="8bit"] .plan-card,
@@ -143,59 +140,59 @@
   [data-skin="8bit"] .search-row button,
   [data-skin="8bit"] .compass,
   [data-skin="8bit"] .shared-stop{
-    border-width:2px;
+    border-width:3px;
   }
   [data-skin="8bit"] .section-label,
   [data-skin="8bit"] .card-cat,
   [data-skin="8bit"] .chip{
-    letter-spacing:.06em;
+    letter-spacing:.02em;
   }
 
   html[data-skin="8bit"][data-theme="dark"], body[data-skin="8bit"][data-theme="dark"]{
-    --bg:#0A0E27;
-    --surface:#151A3D;
-    --ink:#F0F0F0;
-    --ink-soft:#C8CEEF;
-    --ink-faint:#9AA3DE;
-    --accent:#FFD54A;
-    --accent-deep:#FFE28A;
-    --line:#6B7EF0;
-    --rust:#FF7A8A;
-    --good:#5EE89A;
-    --glass:rgba(21,26,61,0.9);
-    --glass-ink:#F0F0F0;
-    --cover-outdoors:linear-gradient(135deg,#1A3D2E,#0F2419);
-    --cover-food:linear-gradient(135deg,#3D2E1A,#241909);
-    --cover-nightlife:linear-gradient(135deg,#2E1A3D,#190924);
-    --cover-culture:linear-gradient(135deg,#1A2A3D,#091624);
-    --cover-icon:rgba(240,240,240,0.35);
-    --shadow-xs:2px 2px 0 #05071a;
-    --shadow-sm:3px 3px 0 #05071a;
-    --shadow-md:4px 4px 0 #05071a;
-    --shadow-lg:6px 6px 0 #05071a;
+    --bg:#241F33;
+    --surface:#332B44;
+    --ink:#F3E9D2;
+    --ink-soft:#C7B896;
+    --ink-faint:#BCB093;
+    --accent:#F0B429;
+    --accent-deep:#F7CB5C;
+    --line:#A8927D;
+    --rust:#F49A91;
+    --good:#7FB35A;
+    --glass:rgba(36,31,51,0.9);
+    --glass-ink:#F3E9D2;
+    --cover-outdoors:linear-gradient(135deg,#2E4A1E,#1B2E11);
+    --cover-food:linear-gradient(135deg,#4A3218,#2E1D0C);
+    --cover-nightlife:linear-gradient(135deg,#3D2E4A,#241A2E);
+    --cover-culture:linear-gradient(135deg,#3A3550,#211D33);
+    --cover-icon:rgba(243,233,210,0.35);
+    --shadow-xs:2px 2px 0 #17131f;
+    --shadow-sm:3px 3px 0 #17131f;
+    --shadow-md:4px 4px 0 #17131f;
+    --shadow-lg:6px 6px 0 #17131f;
   }
   html[data-skin="8bit"][data-theme="light"], body[data-skin="8bit"][data-theme="light"]{
-    --bg:#E8DCC0;
-    --surface:#F5ECD6;
-    --ink:#2B2015;
-    --ink-soft:#5C4A30;
-    --ink-faint:#6E5A3E;
-    --accent:#8A5D06;
-    --accent-deep:#6B4A05;
-    --line:#8A6D3A;
-    --rust:#A33A2A;
-    --good:#2E6B3A;
-    --glass:rgba(245,236,214,0.92);
-    --glass-ink:#2B2015;
-    --cover-outdoors:linear-gradient(135deg,#D8CFA0,#B9C98A);
-    --cover-food:linear-gradient(135deg,#E4C9A0,#D4A96E);
-    --cover-nightlife:linear-gradient(135deg,#D9C4D4,#B896B0);
-    --cover-culture:linear-gradient(135deg,#C4CFD9,#94ACC2);
-    --cover-icon:rgba(43,32,21,0.38);
-    --shadow-xs:2px 2px 0 #4a3a20;
-    --shadow-sm:3px 3px 0 #4a3a20;
-    --shadow-md:4px 4px 0 #4a3a20;
-    --shadow-lg:6px 6px 0 #4a3a20;
+    --bg:#F0DFB0;
+    --surface:#FFF4D6;
+    --ink:#3B2314;
+    --ink-soft:#6B4A2E;
+    --ink-faint:#63492D;
+    --accent:#9C5D0F;
+    --accent-deep:#7A4708;
+    --line:#8B5A2B;
+    --rust:#B23A2E;
+    --good:#4F7A2E;
+    --glass:rgba(255,244,214,0.92);
+    --glass-ink:#3B2314;
+    --cover-outdoors:linear-gradient(135deg,#C9DE94,#9DBF5E);
+    --cover-food:linear-gradient(135deg,#E8C388,#D4A05A);
+    --cover-nightlife:linear-gradient(135deg,#D6C0DE,#B192C2);
+    --cover-culture:linear-gradient(135deg,#C2C4D8,#9497B8);
+    --cover-icon:rgba(59,35,20,0.38);
+    --shadow-xs:2px 2px 0 #6b4a2e;
+    --shadow-sm:3px 3px 0 #6b4a2e;
+    --shadow-md:4px 4px 0 #6b4a2e;
+    --shadow-lg:6px 6px 0 #6b4a2e;
   }
   html{background:var(--bg);}
   *{box-sizing:border-box; margin:0; padding:0;}
@@ -240,9 +237,31 @@
   .hero-head{
     display:flex; align-items:center; justify-content:space-between; gap:12px;
   }
-  .head-btns{display:flex; gap:6px; align-items:center; flex-shrink:0;}
+  .head-btns{position:relative; display:flex; gap:6px; align-items:center; flex-shrink:0;}
   .theme-btn.on{color:var(--accent); border-color:var(--accent);}
   .theme-btn:disabled{opacity:.4; cursor:default;}
+
+  .settings-menu{
+    display:none;
+    position:absolute; top:calc(100% + 8px); right:0;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    box-shadow:var(--shadow-md);
+    padding:6px;
+    min-width:172px;
+    z-index:20;
+  }
+  .settings-menu.open{display:block;}
+  .menu-row{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:14px;
+    padding:9px 10px;
+    border-radius:10px;
+  }
+  .menu-row span{
+    font-family:var(--font-body); font-size:13.5px; color:var(--ink);
+  }
 
   .theme-btn{
     width:34px; height:34px;
@@ -623,6 +642,21 @@
     display:flex; align-items:center; justify-content:center;
   }
   .cover-fallback svg{width:30%; height:30%;}
+  .icon-pixel{display:none;}
+  [data-skin="8bit"] .icon-classic{display:none;}
+  [data-skin="8bit"] .icon-pixel{display:block; image-rendering:pixelated;}
+
+  /* A thin pixel-grass strip along the bottom of every cover tile — cheap,
+     always-on flavor that reads unmistakably "cozy pixel farm" without
+     needing a real asset pipeline. Built as one small tiling SVG. */
+  [data-skin="8bit"] .card-cover::after{
+    content:"";
+    position:absolute; left:0; right:0; bottom:0; height:8px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='8'%3E%3Crect x='0' y='4' width='2' height='4' fill='%23000' fill-opacity='.22'/%3E%3Crect x='3' y='2' width='2' height='6' fill='%23000' fill-opacity='.22'/%3E%3Crect x='6' y='5' width='2' height='3' fill='%23000' fill-opacity='.22'/%3E%3Crect x='9' y='3' width='2' height='5' fill='%23000' fill-opacity='.22'/%3E%3Crect x='12' y='5' width='2' height='3' fill='%23000' fill-opacity='.22'/%3E%3C/svg%3E");
+    background-repeat:repeat-x;
+    background-size:16px 8px;
+    pointer-events:none;
+  }
 
   .card-pin{
     position:absolute; top:10px; right:10px;
@@ -1180,9 +1214,21 @@
     <div class="hero-head">
       <div class="eyebrow"><span class="dot"></span>LIVE FIELD GUIDE</div>
       <div class="head-btns">
-        <button class="theme-btn" id="bioToggle" title="Face ID" aria-label="Face ID" style="display:none;">☺</button>
-        <button class="theme-btn" id="skinBtn" title="Switch skin" aria-label="Switch skin">▦</button>
-        <button class="theme-btn" id="themeBtn" title="Switch theme" aria-label="Switch theme"></button>
+        <button class="theme-btn" id="menuBtn" title="Settings" aria-label="Settings">⋯</button>
+        <div class="settings-menu" id="settingsMenu">
+          <div class="menu-row">
+            <span>Theme</span>
+            <button class="theme-btn" id="themeBtn" title="Switch theme" aria-label="Switch theme"></button>
+          </div>
+          <div class="menu-row">
+            <span>Skin</span>
+            <button class="theme-btn" id="skinBtn" title="Switch skin" aria-label="Switch skin">▦</button>
+          </div>
+          <div class="menu-row" id="bioRow" style="display:none;">
+            <span>Face ID</span>
+            <button class="theme-btn" id="bioToggle" title="Face ID" aria-label="Face ID">☺</button>
+          </div>
+        </div>
       </div>
     </div>
     <h1>What's worth<br><em>wandering to</em>?</h1>
@@ -1357,10 +1403,14 @@ function classifyTags(tags){
 /* ---------- cover art: real photo when we have one, otherwise a
    category tile that never breaks or shows a blank box ---------- */
 const COVER_ART = {
-  outdoors: {grad:"var(--cover-outdoors)", icon:'<path d="M3 18 L9 8 L13 14 L16 9 L21 18 Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="17" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'},
-  food: {grad:"var(--cover-food)", icon:'<rect x="5" y="8" width="11" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M16 10.5h2a2 2 0 0 1 0 4h-2" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="5" y1="20" x2="16" y2="20" stroke="currentColor" stroke-width="1.4"/>'},
-  nightlife: {grad:"var(--cover-nightlife)", icon:'<path d="M6 4h12l-1.3 7.6a4.7 4.7 0 0 1-9.4 0L6 4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><line x1="12" y1="15.6" x2="12" y2="20" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="20" x2="16" y2="20" stroke="currentColor" stroke-width="1.4"/>'},
-  culture: {grad:"var(--cover-culture)", icon:'<path d="M12 3l7 5H5l7-5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><rect x="5" y="9" width="14" height="9" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="3" y1="20" x2="21" y2="20" stroke="currentColor" stroke-width="1.4"/>'}
+  outdoors: {grad:"var(--cover-outdoors)", icon:'<path d="M3 18 L9 8 L13 14 L16 9 L21 18 Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="17" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+    pixel:'<rect x="7" y="2" width="2" height="2"/><rect x="5" y="4" width="2" height="2"/><rect x="9" y="4" width="2" height="2"/><rect x="3" y="6" width="2" height="2"/><rect x="7" y="6" width="2" height="2"/><rect x="11" y="6" width="2" height="2"/><rect x="5" y="8" width="6" height="2"/><rect x="7" y="10" width="2" height="4"/>'},
+  food: {grad:"var(--cover-food)", icon:'<rect x="5" y="8" width="11" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M16 10.5h2a2 2 0 0 1 0 4h-2" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="5" y1="20" x2="16" y2="20" stroke="currentColor" stroke-width="1.4"/>',
+    pixel:'<rect x="3" y="4" width="8" height="2"/><rect x="3" y="6" width="2" height="6"/><rect x="9" y="6" width="2" height="6"/><rect x="3" y="12" width="8" height="2"/><rect x="11" y="6" width="2" height="2"/><rect x="13" y="6" width="2" height="4"/><rect x="11" y="10" width="2" height="2"/>'},
+  nightlife: {grad:"var(--cover-nightlife)", icon:'<path d="M6 4h12l-1.3 7.6a4.7 4.7 0 0 1-9.4 0L6 4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><line x1="12" y1="15.6" x2="12" y2="20" stroke="currentColor" stroke-width="1.4"/><line x1="8" y1="20" x2="16" y2="20" stroke="currentColor" stroke-width="1.4"/>',
+    pixel:'<rect x="4" y="2" width="8" height="2"/><rect x="4" y="4" width="2" height="2"/><rect x="10" y="4" width="2" height="2"/><rect x="6" y="6" width="4" height="2"/><rect x="7" y="8" width="2" height="4"/><rect x="4" y="12" width="8" height="2"/>'},
+  culture: {grad:"var(--cover-culture)", icon:'<path d="M12 3l7 5H5l7-5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><rect x="5" y="9" width="14" height="9" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="3" y1="20" x2="21" y2="20" stroke="currentColor" stroke-width="1.4"/>',
+    pixel:'<rect x="6" y="2" width="4" height="2"/><rect x="2" y="4" width="12" height="2"/><rect x="2" y="6" width="2" height="6"/><rect x="6" y="6" width="2" height="6"/><rect x="10" y="6" width="2" height="6"/><rect x="2" y="12" width="12" height="2"/>'}
 };
 const COVER_ALIAS = {
   coffee:'food', bars:'nightlife', scenic:'outdoors', historic:'culture',
@@ -1368,7 +1418,10 @@ const COVER_ALIAS = {
 };
 function coverFor(p){
   const art = COVER_ART[p.cat] || COVER_ART[COVER_ALIAS[p.cat]] || COVER_ART.outdoors;
-  const fallback = `<div class="cover-fallback" style="color:var(--cover-icon)"><svg viewBox="0 0 24 24">${art.icon}</svg></div>`;
+  const fallback = `<div class="cover-fallback" style="color:var(--cover-icon)">
+    <svg class="icon-classic" viewBox="0 0 24 24">${art.icon}</svg>
+    <svg class="icon-pixel" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor">${art.pixel}</svg>
+  </div>`;
   const img = p.photo ? `<img src="${p.photo}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();">` : "";
   return `<div class="card-cover" style="background:${art.grad}">${fallback}${img}</div>`;
 }
@@ -1448,7 +1501,7 @@ function slotOf(id, slot){
   return dayPlan.stops.some(s => s.id === id && s.slot === slot);
 }
 function stripPlace(place){
-  const {_dist, _wiki, ...clean} = place;
+  const {_dist, _wiki, _wikidata, ...clean} = place;
   return clean;
 }
 // A stop's nominal time: meals use their slot time; a sight inherits the
@@ -1865,6 +1918,9 @@ function describeTags(tags){
   if(tags.natural) bits.push(tags.natural.replace(/_/g,' '));
   return bits.length ? ("Listed as " + bits.join(', ') + " on OpenStreetMap.") : "Community-mapped spot on OpenStreetMap.";
 }
+function commonsFilePathURL(filename){
+  return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(filename)}?width=600`;
+}
 function photoFor(tags){
   // Only openly-licensed, directly-hotlinkable sources, so images never
   // depend on an API key or break due to hotlink protection.
@@ -1874,8 +1930,7 @@ function photoFor(tags){
     if(!val) continue;
     if(/^https:\/\//.test(val)) return val;
     if(/^File:/i.test(val)){
-      const file = val.replace(/^File:/i, '');
-      return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=600`;
+      return commonsFilePathURL(val.replace(/^File:/i, ''));
     }
     // Category: values point at a gallery, not an image — skip them.
   }
@@ -1889,6 +1944,13 @@ function wikiTitleFor(tags){
   const m = raw.match(/^([a-z\-]+):(.+)$/i);
   if(!m) return null;
   return {lang: m[1].toLowerCase(), title: m[2]};
+}
+// A separate wikidata tag (a Q-id) sometimes exists even without a wikipedia
+// tag — this catches places that are "notable" on Wikidata but don't have a
+// full Wikipedia article in whatever language OSM happened to link.
+function wikidataIdFor(tags){
+  const raw = tags.wikidata;
+  return raw && /^Q\d+$/.test(raw) ? raw : null;
 }
 
 // Wikipedia's API takes up to 50 titles per call and supports CORS, so a
@@ -1940,6 +2002,47 @@ async function attachWikiPhotos(places){
       }
     }
   }));
+  return places;
+}
+
+// Both passes run through here so every call site gets both sources without
+// needing to remember to chain them individually.
+async function enrichPhotos(places){
+  await enrichPhotos(places);
+  await attachWikidataPhotos(places);
+  return places;
+}
+// wikidata tag (a Q-id) without a full Wikipedia article in any language OSM
+// happened to link. Wikidata's own P18 "image" claim, when present, catches
+// a few more — same trust tier as Wikipedia since it's the same foundation,
+// same batching approach, no key required.
+async function attachWikidataPhotos(places){
+  const pending = places.filter(p => !p.photo && p._wikidata);
+  if(!pending.length) return places;
+
+  for(let i = 0; i < pending.length; i += 50){
+    const batch = pending.slice(i, i + 50);
+    const ids = batch.map(p => p._wikidata).join('|');
+    const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&origin=*`
+              + `&props=claims&ids=${encodeURIComponent(ids)}`;
+    const t = withTimeout(null, 8000);
+    try{
+      const resp = await fetch(url, {signal: t.signal});
+      t.clear();
+      if(!resp.ok) continue;
+      const data = await resp.json();
+      const entities = data.entities || {};
+      batch.forEach(p => {
+        const claims = entities[p._wikidata] && entities[p._wikidata].claims;
+        const p18 = claims && claims.P18 && claims.P18[0];
+        const filename = p18 && p18.mainsnak && p18.mainsnak.datavalue && p18.mainsnak.datavalue.value;
+        if(filename) p.photo = commonsFilePathURL(filename);
+      });
+    }catch(err){
+      t.clear();
+      console.warn('Wikidata photo lookup failed:', err);
+    }
+  }
   return places;
 }
 function withTimeout(promise, ms){
@@ -2018,6 +2121,7 @@ async function fetchLivePlaces(lat, lon, radiusMi){
             phone: el.tags.phone || el.tags["contact:phone"] || null,
             photo: photoFor(el.tags),
             _wiki: wikiTitleFor(el.tags),
+            _wikidata: wikidataIdFor(el.tags),
             source: "osm"
           }));
         // Tell the caller if we had to shrink the area to succeed.
@@ -2157,7 +2261,7 @@ function togglePin(place){
   } else {
     pinnedIds.add(place.id);
     // Drop transient fields so stale mileage/lookup data isn't persisted.
-    const {_dist, _wiki, ...clean} = place;
+    const {_dist, _wiki, _wikidata, ...clean} = place;
     pinnedStore[place.id] = clean;
   }
   savePins();
@@ -2307,8 +2411,27 @@ const lockSubmit = document.getElementById('lockSubmit');
 const lockReset = document.getElementById('lockReset');
 const bioBtn = document.getElementById('bioBtn');
 const bioToggle = document.getElementById('bioToggle');
+const bioRow = document.getElementById('bioRow');
 const bioOffer = document.getElementById('bioOffer');
 const bioEnable = document.getElementById('bioEnable');
+
+/* ---------- settings menu ----------
+   Theme, skin, and Face ID controls live inside here now rather than as
+   three loose header buttons. Each control keeps its original id and click
+   logic untouched — only its position moved. */
+const menuBtn = document.getElementById('menuBtn');
+const settingsMenu = document.getElementById('settingsMenu');
+menuBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  settingsMenu.classList.toggle('open');
+});
+document.addEventListener('click', (e) => {
+  if(settingsMenu.classList.contains('open')
+     && !e.target.closest('.settings-menu')
+     && !e.target.closest('#menuBtn')){
+    settingsMenu.classList.remove('open');
+  }
+});
 const bioDismiss = document.getElementById('bioDismiss');
 
 function hasVault(){ return !!localStorage.getItem(VAULT_KEY); }
@@ -2344,7 +2467,7 @@ function applyPendingImport(){
 // first-run nudge. Dismissing the banner must never strand the feature.
 async function refreshBioUI(){
   const supported = await bioAvailable();
-  bioToggle.style.display = supported ? 'flex' : 'none';
+  bioRow.style.display = supported ? 'flex' : 'none';
   if(!supported) return;
   const on = bioEnrolled();
   const mode = bioMode();
@@ -2919,7 +3042,7 @@ async function refreshPlaces(){
       ? `Refreshed — ${places.length} spots within ${searchRadiusMi} miles${lastLabel ? ' of ' + lastLabel : ''}.`
       : `Nothing found within ${searchRadiusMi} miles — try a wider radius.`;
     render();
-    await attachWikiPhotos(places);
+    await enrichPhotos(places);
     if(activePlaces === places) render();
   }catch(err){
     console.error("Refresh failed:", err);
@@ -3041,7 +3164,7 @@ document.getElementById("locateBtn").addEventListener("click", () => {
         btn.disabled = false;
         render();
         // Photos arrive a beat later; re-render once they're in.
-        await attachWikiPhotos(livePlaces);
+        await enrichPhotos(livePlaces);
         if(activePlaces === livePlaces) render();
         return;
       }catch(err){
@@ -3113,7 +3236,7 @@ async function runSearch(){
         : `Nothing mapped near ${place.label} — try a wider radius or another category.`;
       render();
       // Photos arrive a beat later; re-render once they're in.
-      await attachWikiPhotos(livePlaces);
+      await enrichPhotos(livePlaces);
       if(activePlaces === livePlaces) render();
     }catch(fetchErr){
       console.error("Overpass error:", fetchErr);
@@ -3148,7 +3271,7 @@ document.getElementById("radiusChips").addEventListener("click", async (e) => {
       resetPage();
       statusLine.textContent = `Found ${places.length} spots within ${searchRadiusMi} miles${lastLabel ? ' of ' + lastLabel : ''}.`;
       render();
-      await attachWikiPhotos(places);
+      await enrichPhotos(places);
       if(activePlaces === places) render();
     }catch(err){
       console.error("Overpass error:", err);
@@ -3220,7 +3343,7 @@ catSelect.addEventListener("change", async () => {
       resetPage();
       statusLine.textContent = `${places.length} ${CAT_LABEL[activeCat]} nearby.`;
       render();
-      await attachWikiPhotos(places);
+      await enrichPhotos(places);
       if(activePlaces === places) render();
     }catch(err){
       console.error(err);
