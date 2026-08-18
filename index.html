@@ -32,7 +32,7 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23141A1F'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23F2F5F7' stroke-width='2'/%3E%3Cpath d='M50 28 L58 50 L50 72 L42 50 Z' fill='%232E7D93'/%3E%3C/svg%3E">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Pixelify+Sans:wght@400;500;600;700&family=Zen+Maru+Gothic:wght@400;500;700&family=Caveat:wght@500;600;700&family=Nunito:wght@400;600;700&family=Quicksand:wght@400;500;600;700&family=Rye&family=Special+Elite&family=Orbitron:wght@400;600;700&family=Exo+2:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
 // Runs before first paint so there's no flash of the wrong theme or skin.
 // Theme modes: 'auto' (follow OS), 'light', 'dark'. Skin: 'classic', '8bit'.
@@ -43,7 +43,8 @@
     skin = localStorage.getItem('afield-skin');
   }catch(e){}
   if(!mode) mode = 'auto';
-  if(skin !== '8bit') skin = 'classic';
+  var VALID_SKINS = ['classic','8bit','zen','nature','ocean','adventure','space'];
+  if(VALID_SKINS.indexOf(skin) === -1) skin = 'classic';
   var dark = mode === 'dark' ||
     (mode === 'auto' && window.matchMedia &&
      window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -193,6 +194,281 @@
     --shadow-sm:3px 3px 0 #6b4a2e;
     --shadow-md:4px 4px 0 #6b4a2e;
     --shadow-lg:6px 6px 0 #6b4a2e;
+  }
+
+  /* ---------- MOOD SKINS: structure ----------
+     Each gets its own font pairing and corner language — not just new
+     colors — so switching skins changes how the UI actually reads, the
+     same way 8-bit does. Colors are defined further below. */
+
+  /* Zen — flat, hairline, generous space. Minimalism itself is the
+     signature here, so there's no decorative flourish; the absence of one
+     is the point. */
+  [data-skin="zen"]{
+    --font-display:'Zen Maru Gothic', sans-serif;
+    --font-body:'Inter', sans-serif;
+    --font-label:'Zen Maru Gothic', sans-serif;
+  }
+  [data-skin="zen"] *, [data-skin="zen"] *::before, [data-skin="zen"] *::after{
+    border-radius:22px !important;
+  }
+  [data-skin="zen"] .card-pin, [data-skin="zen"] .card-add,
+  [data-skin="zen"] .theme-btn, [data-skin="zen"] .pager-btn,
+  [data-skin="zen"] .mark-btn, [data-skin="zen"] .compass{ border-radius:50% !important; }
+  [data-skin="zen"] .card, [data-skin="zen"] .plan-card,
+  [data-skin="zen"] .locate-btn, [data-skin="zen"] .lock-btn{
+    border-width:1px; box-shadow:none !important;
+  }
+  [data-skin="zen"] .hero h1{font-weight:500; letter-spacing:.01em;}
+  [data-skin="zen"] .section-label{letter-spacing:.16em; font-weight:500;}
+
+  /* Nature — organic, asymmetric, hand-touched. Corners deliberately don't
+     match each other, and section labels get a leaf mark instead of the
+     square bullet every other skin uses. */
+  [data-skin="nature"]{
+    --font-display:'Caveat', cursive;
+    --font-body:'Nunito', sans-serif;
+    --font-label:'Nunito', sans-serif;
+  }
+  [data-skin="nature"] .card, [data-skin="nature"] .plan-card,
+  [data-skin="nature"] .shared-stop, [data-skin="nature"] .journal-entry{
+    border-radius:28px 14px 28px 14px !important;
+  }
+  [data-skin="nature"] .card-cover{ border-radius:28px 14px 0 0 !important; }
+  [data-skin="nature"] .chip, [data-skin="nature"] .locate-btn,
+  [data-skin="nature"] .lock-btn, [data-skin="nature"] .pin-input,
+  [data-skin="nature"] #catSelect, [data-skin="nature"] #skinSelect{
+    border-radius:18px 8px 18px 8px !important;
+  }
+  [data-skin="nature"] .hero h1{font-family:var(--font-display); font-size:40px; font-weight:600;}
+  [data-skin="nature"] .card-name{font-family:var(--font-display); font-size:24px;}
+  [data-skin="nature"] .section-label::before{content:"🌿 " !important;}
+
+  /* Ocean — fluid, pill-rounded, everything softened toward a droplet. */
+  [data-skin="ocean"]{
+    --font-display:'Quicksand', sans-serif;
+    --font-body:'Quicksand', sans-serif;
+    --font-label:'Quicksand', sans-serif;
+  }
+  [data-skin="ocean"] *, [data-skin="ocean"] *::before, [data-skin="ocean"] *::after{
+    border-radius:26px !important;
+  }
+  [data-skin="ocean"] .card-cover{ border-radius:26px 26px 0 0 !important; }
+  [data-skin="ocean"] .card-pin, [data-skin="ocean"] .card-add,
+  [data-skin="ocean"] .theme-btn, [data-skin="ocean"] .pager-btn,
+  [data-skin="ocean"] .mark-btn, [data-skin="ocean"] .compass{ border-radius:50% !important; }
+  [data-skin="ocean"] .card-actions a, [data-skin="ocean"] .card-actions-ride,
+  [data-skin="ocean"] .ride-opt{ border-radius:0 !important; }
+  [data-skin="ocean"] .hero h1{font-weight:600;}
+  /* A thin wave line along the bottom of every cover tile. */
+  [data-skin="ocean"] .card-cover::after{
+    content:"";
+    position:absolute; left:0; right:0; bottom:0; height:10px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='10'%3E%3Cpath d='M0 5 Q10 0 20 5 T40 5' stroke='%23fff' stroke-width='1.6' fill='none' opacity='.4'/%3E%3C/svg%3E");
+    background-repeat:repeat-x;
+    background-size:40px 10px;
+    pointer-events:none;
+  }
+
+  /* Adventure — stamped paper map: sharp corners, thick ink borders, a
+     dashed trail along every cover tile. */
+  [data-skin="adventure"]{
+    --font-display:'Rye', cursive;
+    --font-body:'Inter', sans-serif;
+    --font-label:'Special Elite', monospace;
+  }
+  [data-skin="adventure"] *, [data-skin="adventure"] *::before, [data-skin="adventure"] *::after{
+    border-radius:2px !important;
+  }
+  [data-skin="adventure"] .card, [data-skin="adventure"] .plan-card,
+  [data-skin="adventure"] .chip, [data-skin="adventure"] .locate-btn,
+  [data-skin="adventure"] .lock-btn, [data-skin="adventure"] .pin-input,
+  [data-skin="adventure"] #catSelect, [data-skin="adventure"] #skinSelect,
+  [data-skin="adventure"] .shared-stop{ border-width:2px; }
+  [data-skin="adventure"] .hero h1{font-size:26px; line-height:1.35; letter-spacing:.01em;}
+  [data-skin="adventure"] .card-name{font-size:20px;}
+  [data-skin="adventure"] .section-label, [data-skin="adventure"] .card-cat,
+  [data-skin="adventure"] .chip{ letter-spacing:.08em; }
+  [data-skin="adventure"] .card-cover::after{
+    content:"";
+    position:absolute; left:0; right:0; bottom:0; height:6px;
+    background-image:repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 6px, transparent 6px 14px);
+    pointer-events:none;
+  }
+
+  /* Space — sharp panels with clipped HUD corners, glow shadows, a faint
+     star field on empty cover tiles. */
+  [data-skin="space"]{
+    --font-display:'Orbitron', sans-serif;
+    --font-body:'Exo 2', sans-serif;
+    --font-label:'Orbitron', sans-serif;
+  }
+  [data-skin="space"] *, [data-skin="space"] *::before, [data-skin="space"] *::after{
+    border-radius:4px !important;
+  }
+  [data-skin="space"] .card, [data-skin="space"] .plan-card{
+    clip-path:polygon(0 12px, 12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+  }
+  [data-skin="space"] .hero h1{font-size:22px; letter-spacing:.02em; line-height:1.5;}
+  [data-skin="space"] .card-name{font-size:14px; letter-spacing:.01em;}
+  [data-skin="space"] .section-label, [data-skin="space"] .card-cat,
+  [data-skin="space"] .chip{ letter-spacing:.1em; }
+  [data-skin="space"] .cover-fallback{
+    background-image:
+      radial-gradient(1px 1px at 15% 25%, rgba(255,255,255,.8), transparent),
+      radial-gradient(1px 1px at 70% 60%, rgba(255,255,255,.6), transparent),
+      radial-gradient(1px 1px at 40% 80%, rgba(255,255,255,.5), transparent),
+      radial-gradient(1px 1px at 85% 20%, rgba(255,255,255,.7), transparent),
+      radial-gradient(1px 1px at 55% 40%, rgba(255,255,255,.4), transparent);
+  }
+
+  /* ---------- MOOD SKINS: colors ----------
+     Zen, Nature, Ocean, Adventure, Space — palette-only. No structural
+     overrides, so they inherit Classic's rounded corners, soft blur
+     shadows, and fonts automatically. Only the color tokens change. */
+  html[data-skin="zen"][data-theme="light"], body[data-skin="zen"][data-theme="light"]{
+    --bg:#F0EEE6; --surface:#FAF9F4; --ink:#2B2A25; --ink-soft:#5C5A50; --ink-faint:#6E6B5D;
+    --accent:#4E6851; --accent-deep:#3F5A42; --line:#8D8878; --rust:#A3503F; --good:#4C7A50;
+    --glass:rgba(250,249,244,0.92); --glass-ink:#2B2A25;
+    --cover-outdoors:linear-gradient(135deg,#E3E7DA,#C7CFB6);
+    --cover-food:linear-gradient(135deg,#EFE6D6,#DACBAE);
+    --cover-nightlife:linear-gradient(135deg,#E5E0E5,#CBC3CB);
+    --cover-culture:linear-gradient(135deg,#DCE2DC,#BEC9BE);
+    --cover-icon:rgba(43,42,37,0.32);
+    --shadow-xs:0 0 0 rgba(0,0,0,0);
+    --shadow-sm:0 1px 1px rgba(43,42,37,0.04);
+    --shadow-md:0 2px 3px rgba(43,42,37,0.05);
+    --shadow-lg:0 4px 6px rgba(43,42,37,0.06);
+  }
+  html[data-skin="zen"][data-theme="dark"], body[data-skin="zen"][data-theme="dark"]{
+    --bg:#1A1D1A; --surface:#242820; --ink:#EDEAE0; --ink-soft:#C0BCAC; --ink-faint:#A5A08D;
+    --accent:#8FAF8A; --accent-deep:#A8C6A2; --line:#6C7261; --rust:#D98572; --good:#8FBF8A;
+    --glass:rgba(26,29,26,0.85); --glass-ink:#EDEAE0;
+    --cover-outdoors:linear-gradient(135deg,#243024,#182018);
+    --cover-food:linear-gradient(135deg,#302A20,#201C14);
+    --cover-nightlife:linear-gradient(135deg,#2A2630,#1C1A20);
+    --cover-culture:linear-gradient(135deg,#242A2A,#181E1E);
+    --cover-icon:rgba(237,234,224,0.30);
+    --shadow-xs:0 0 0 rgba(0,0,0,0);
+    --shadow-sm:0 1px 1px rgba(0,0,0,0.25);
+    --shadow-md:0 2px 3px rgba(0,0,0,0.30);
+    --shadow-lg:0 4px 6px rgba(0,0,0,0.35);
+  }
+
+  html[data-skin="nature"][data-theme="light"], body[data-skin="nature"][data-theme="light"]{
+    --bg:#EEF3E4; --surface:#FAFCF3; --ink:#1E2E1A; --ink-soft:#3E5636; --ink-faint:#556B49;
+    --accent:#4C7A3D; --accent-deep:#345A29; --line:#7E9A6C; --rust:#A8452D; --good:#3E7A34;
+    --glass:rgba(250,252,243,0.92); --glass-ink:#1E2E1A;
+    --cover-outdoors:linear-gradient(135deg,#CFE0B3,#A6C481);
+    --cover-food:linear-gradient(135deg,#E6D3A8,#CBAE72);
+    --cover-nightlife:linear-gradient(135deg,#D8C9DE,#B49CC0);
+    --cover-culture:linear-gradient(135deg,#C7D6C2,#9DB596);
+    --cover-icon:rgba(30,46,26,0.35);
+    --shadow-xs:0 1px 2px rgba(30,46,26,0.06);
+    --shadow-sm:0 3px 10px rgba(30,46,26,0.08), 0 1px 2px rgba(30,46,26,0.06);
+    --shadow-md:0 10px 24px rgba(30,46,26,0.13), 0 2px 6px rgba(30,46,26,0.06);
+    --shadow-lg:0 24px 48px rgba(30,46,26,0.19), 0 8px 16px rgba(30,46,26,0.08);
+  }
+  html[data-skin="nature"][data-theme="dark"], body[data-skin="nature"][data-theme="dark"]{
+    --bg:#10190F; --surface:#1B2A17; --ink:#E7F0DD; --ink-soft:#BAD1AA; --ink-faint:#87A176;
+    --accent:#7FCB63; --accent-deep:#9FDB89; --line:#5C7A4C; --rust:#E0876B; --good:#8ED973;
+    --glass:rgba(16,25,15,0.85); --glass-ink:#E7F0DD;
+    --cover-outdoors:linear-gradient(135deg,#213A1B,#152811);
+    --cover-food:linear-gradient(135deg,#3A2E18,#28200E);
+    --cover-nightlife:linear-gradient(135deg,#302438,#201A28);
+    --cover-culture:linear-gradient(135deg,#1E3226,#132018);
+    --cover-icon:rgba(231,240,221,0.32);
+    --shadow-xs:0 1px 2px rgba(0,0,0,0.40);
+    --shadow-sm:0 3px 10px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.35);
+    --shadow-md:0 10px 24px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.35);
+    --shadow-lg:0 24px 48px rgba(0,0,0,0.65), 0 8px 16px rgba(0,0,0,0.40);
+  }
+
+  html[data-skin="ocean"][data-theme="light"], body[data-skin="ocean"][data-theme="light"]{
+    --bg:#EAF4F5; --surface:#F7FCFD; --ink:#0F2B3A; --ink-soft:#2E5568; --ink-faint:#456A7A;
+    --accent:#12707F; --accent-deep:#146575; --line:#5A8896; --rust:#A8442E; --good:#146B54;
+    --glass:rgba(247,252,253,0.92); --glass-ink:#0F2B3A;
+    --cover-outdoors:linear-gradient(135deg,#C5E4D8,#93C4B0);
+    --cover-food:linear-gradient(135deg,#E4D9B8,#C9B683);
+    --cover-nightlife:linear-gradient(135deg,#C5D9E4,#93B4C9);
+    --cover-culture:linear-gradient(135deg,#BFDDE2,#8CBFC7);
+    --cover-icon:rgba(15,43,58,0.35);
+    --shadow-xs:0 2px 6px rgba(18,112,127,0.10);
+    --shadow-sm:0 6px 18px rgba(18,112,127,0.14);
+    --shadow-md:0 14px 32px rgba(18,112,127,0.18);
+    --shadow-lg:0 28px 56px rgba(18,112,127,0.24);
+  }
+  html[data-skin="ocean"][data-theme="dark"], body[data-skin="ocean"][data-theme="dark"]{
+    --bg:#071B26; --surface:#0F2A38; --ink:#E3F3F5; --ink-soft:#A9CBD1; --ink-faint:#78A3AC;
+    --accent:#4FD3E5; --accent-deep:#7FE0EF; --line:#557F8D; --rust:#F0917A; --good:#5FD4A9;
+    --glass:rgba(7,27,38,0.85); --glass-ink:#E3F3F5;
+    --cover-outdoors:linear-gradient(135deg,#123A30,#0B2820);
+    --cover-food:linear-gradient(135deg,#3A2E18,#28200E);
+    --cover-nightlife:linear-gradient(135deg,#1C2C3A,#121F2A);
+    --cover-culture:linear-gradient(135deg,#173540,#0F242C);
+    --cover-icon:rgba(227,243,245,0.32);
+    --shadow-xs:0 2px 6px rgba(79,211,229,0.12);
+    --shadow-sm:0 6px 18px rgba(79,211,229,0.16);
+    --shadow-md:0 14px 32px rgba(79,211,229,0.20);
+    --shadow-lg:0 28px 56px rgba(79,211,229,0.26);
+  }
+
+  html[data-skin="adventure"][data-theme="light"], body[data-skin="adventure"][data-theme="light"]{
+    --bg:#F1E9D8; --surface:#FBF6EA; --ink:#2E2416; --ink-soft:#5A4B32; --ink-faint:#6E5C3E;
+    --accent:#B24A24; --accent-deep:#8A3A1B; --line:#93815C; --rust:#A8342A; --good:#4C5B30;
+    --glass:rgba(251,246,234,0.92); --glass-ink:#2E2416;
+    --cover-outdoors:linear-gradient(135deg,#D3D9A8,#AEBB74);
+    --cover-food:linear-gradient(135deg,#E8C388,#D4A05A);
+    --cover-nightlife:linear-gradient(135deg,#D9C4A8,#BB9A6D);
+    --cover-culture:linear-gradient(135deg,#C9C0A8,#A79A75);
+    --cover-icon:rgba(46,36,22,0.38);
+    --shadow-xs:1px 1px 0 #6e5c3e;
+    --shadow-sm:2px 2px 0 #6e5c3e;
+    --shadow-md:3px 3px 0 #6e5c3e;
+    --shadow-lg:5px 5px 0 #6e5c3e;
+  }
+  html[data-skin="adventure"][data-theme="dark"], body[data-skin="adventure"][data-theme="dark"]{
+    --bg:#1D1811; --surface:#2A241A; --ink:#F0E6D2; --ink-soft:#CBB994; --ink-faint:#A5946E;
+    --accent:#E38A4A; --accent-deep:#EDA870; --line:#87794F; --rust:#E4816D; --good:#9CBF6E;
+    --glass:rgba(29,24,17,0.85); --glass-ink:#F0E6D2;
+    --cover-outdoors:linear-gradient(135deg,#3A3A1E,#282810);
+    --cover-food:linear-gradient(135deg,#4A3218,#2E1D0C);
+    --cover-nightlife:linear-gradient(135deg,#3A2E1E,#281F12);
+    --cover-culture:linear-gradient(135deg,#332C1E,#221D12);
+    --cover-icon:rgba(240,230,210,0.34);
+    --shadow-xs:1px 1px 0 #0e0b07;
+    --shadow-sm:2px 2px 0 #0e0b07;
+    --shadow-md:3px 3px 0 #0e0b07;
+    --shadow-lg:5px 5px 0 #0e0b07;
+  }
+
+  html[data-skin="space"][data-theme="light"], body[data-skin="space"][data-theme="light"]{
+    --bg:#EEF0F7; --surface:#FBFBFE; --ink:#10132B; --ink-soft:#333759; --ink-faint:#4E5273;
+    --accent:#5A3FC0; --accent-deep:#432D96; --line:#7E82AA; --rust:#B2394D; --good:#1E7A6B;
+    --glass:rgba(251,251,254,0.92); --glass-ink:#10132B;
+    --cover-outdoors:linear-gradient(135deg,#C9CEE0,#9CA4C4);
+    --cover-food:linear-gradient(135deg,#DDD0E0,#B99EC0);
+    --cover-nightlife:linear-gradient(135deg,#D0C6E8,#A791CE);
+    --cover-culture:linear-gradient(135deg,#C0C6E4,#8F98C6);
+    --cover-icon:rgba(16,19,43,0.35);
+    --shadow-xs:0 2px 8px rgba(90,63,192,0.14);
+    --shadow-sm:0 6px 18px rgba(90,63,192,0.18);
+    --shadow-md:0 14px 32px rgba(90,63,192,0.22);
+    --shadow-lg:0 28px 56px rgba(90,63,192,0.28);
+  }
+  html[data-skin="space"][data-theme="dark"], body[data-skin="space"][data-theme="dark"]{
+    --bg:#06060F; --surface:#12111F; --ink:#E8E6F5; --ink-soft:#B3AFD1; --ink-faint:#8B87AD;
+    --accent:#A56BFF; --accent-deep:#C298FF; --line:#6A6390; --rust:#F0788C; --good:#4FD1B0;
+    --glass:rgba(6,6,15,0.85); --glass-ink:#E8E6F5;
+    --cover-outdoors:linear-gradient(135deg,#1A2A2E,#101C1F);
+    --cover-food:linear-gradient(135deg,#2A2030,#1A1420);
+    --cover-nightlife:linear-gradient(135deg,#241E38,#161226);
+    --cover-culture:linear-gradient(135deg,#1E2038,#121428);
+    --cover-icon:rgba(232,230,245,0.32);
+    --shadow-xs:0 0 8px rgba(165,107,255,0.25);
+    --shadow-sm:0 0 18px rgba(165,107,255,0.30);
+    --shadow-md:0 0 32px rgba(165,107,255,0.35);
+    --shadow-lg:0 0 56px rgba(165,107,255,0.42);
   }
   html{background:var(--bg);}
   *{box-sizing:border-box; margin:0; padding:0;}
@@ -472,6 +748,8 @@
     flex:1;
     min-width:150px;
   }
+  .menu-select{min-width:0; width:150px; flex:none;}
+  .menu-select #skinSelect{font-size:12px; padding:7px 26px 7px 10px;}
   .select-wrap::after{
     content:"▾";
     position:absolute; right:12px; top:50%;
@@ -480,7 +758,7 @@
     color:var(--ink-faint);
     font-size:11px;
   }
-  #catSelect{
+  #catSelect, #skinSelect{
     -webkit-appearance:none; appearance:none;
     width:100%;
     background:var(--surface);
@@ -494,9 +772,9 @@
     cursor:pointer;
     box-shadow:var(--shadow-xs);
   }
-  #catSelect:focus{outline:none; border-color:var(--accent);}
-  #catSelect:disabled{cursor:default;}
-  #catSelect option{background:var(--surface); color:var(--ink);}
+  #catSelect:focus, #skinSelect:focus{outline:none; border-color:var(--accent);}
+  #catSelect:disabled, #skinSelect:disabled{cursor:default;}
+  #catSelect option, #skinSelect option{background:var(--surface); color:var(--ink);}
 
   .chip-divider{
     width:1px;
@@ -1338,7 +1616,17 @@
           </div>
           <div class="menu-row">
             <span>Skin</span>
-            <button class="theme-btn" id="skinBtn" title="Switch skin" aria-label="Switch skin">▦</button>
+            <div class="select-wrap menu-select">
+              <select id="skinSelect" aria-label="Skin">
+                <option value="classic">Classic</option>
+                <option value="8bit">8-bit (Stardew)</option>
+                <option value="zen">Zen</option>
+                <option value="nature">Nature</option>
+                <option value="ocean">Ocean</option>
+                <option value="adventure">Adventure</option>
+                <option value="space">Space</option>
+              </select>
+            </div>
           </div>
           <div class="menu-row" id="bioRow" style="display:none;">
             <span>Face ID</span>
@@ -1920,29 +2208,27 @@ const themeBtn = document.getElementById('themeBtn');
 const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
 /* ---------- skin ----------
-   Independent of light/dark: classic (the app's normal look) or 8bit (retro
-   RPG treatment). Same DOM and render logic either way — this only swaps
-   which token block is active, which is the entire point of having kept
-   every component on CSS variables rather than hardcoded colors. */
-const SKIN_ICON = {classic:'▦', '8bit':'▧'};
-const SKIN_LABEL = {classic:'Classic look — tap for 8-bit', '8bit':'8-bit look — tap for classic'};
-const skinBtn = document.getElementById('skinBtn');
+   Independent of light/dark. Same DOM and render logic across all seven —
+   this only swaps which token block is active, which is the entire point
+   of having kept every component on CSS variables rather than hardcoded
+   colors. A toggle stopped making sense past two options, so this is now
+   a dropdown rather than a cycling button. */
+const VALID_SKINS = ['classic', '8bit', 'zen', 'nature', 'ocean', 'adventure', 'space'];
+const skinSelect = document.getElementById('skinSelect');
 
 function currentSkin(){
-  return document.documentElement.getAttribute('data-skin') || 'classic';
+  const s = document.documentElement.getAttribute('data-skin');
+  return VALID_SKINS.includes(s) ? s : 'classic';
 }
 function applySkin(skin){
+  if(!VALID_SKINS.includes(skin)) skin = 'classic';
   document.documentElement.setAttribute('data-skin', skin);
   if(document.body) document.body.setAttribute('data-skin', skin);
-  skinBtn.textContent = SKIN_ICON[skin];
-  skinBtn.title = SKIN_LABEL[skin];
-  skinBtn.classList.toggle('on', skin === '8bit');
+  skinSelect.value = skin;
   try{ localStorage.setItem('afield-skin', skin); }catch(e){}
   syncThemeColorMeta();
 }
-skinBtn.addEventListener('click', () => {
-  applySkin(currentSkin() === '8bit' ? 'classic' : '8bit');
-});
+skinSelect.addEventListener('change', () => applySkin(skinSelect.value));
 applySkin(currentSkin());
 
 function syncThemeColorMeta(){
@@ -1950,7 +2236,12 @@ function syncThemeColorMeta(){
   const skin = currentSkin();
   const colors = {
     'classic-light':'#F2F5F7', 'classic-dark':'#0E1418',
-    '8bit-light':'#E8DCC0', '8bit-dark':'#0A0E27'
+    '8bit-light':'#E8DCC0', '8bit-dark':'#0A0E27',
+    'zen-light':'#F0EEE6', 'zen-dark':'#1A1D1A',
+    'nature-light':'#EEF3E4', 'nature-dark':'#10190F',
+    'ocean-light':'#EAF4F5', 'ocean-dark':'#071B26',
+    'adventure-light':'#F1E9D8', 'adventure-dark':'#1D1811',
+    'space-light':'#EEF0F7', 'space-dark':'#06060F'
   };
   const meta = document.querySelector('meta[name="theme-color"]');
   if(meta) meta.setAttribute('content', colors[`${skin}-${dark ? 'dark' : 'light'}`]);
