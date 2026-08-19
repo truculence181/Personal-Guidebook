@@ -3956,7 +3956,18 @@ function handleOrientation(e){
 function renderNeedle(){
   const needle = document.getElementById("needle");
   if(!needle) return;
-  if(lastDestBearing == null) return;
+  if(lastDestBearing == null){
+    // No destination yet (nothing searched or located) — if a live heading
+    // is available, still point north rather than leaving the needle
+    // blank. A real compass shows a direction whether or not you're
+    // navigating anywhere, and this also makes the live-heading toggle
+    // itself verifiable before you've searched for anything.
+    if(liveCompassActive && deviceHeading != null){
+      const rotation = (360 - deviceHeading) % 360;
+      needle.style.transform = `translate(-50%,-100%) rotate(${rotation}deg)`;
+    }
+    return;
+  }
   const rotation = (liveCompassActive && deviceHeading != null)
     ? (lastDestBearing - deviceHeading + 360) % 360
     : lastDestBearing;
