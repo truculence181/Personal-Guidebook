@@ -671,6 +671,9 @@
     transition:transform 1s cubic-bezier(.4,0,.2,1);
     border-radius:2px;
   }
+  /* Continuous device-heading updates need to track rotation closely rather
+     than ease into place like an occasional target change does. */
+  .needle.live{transition:transform .12s linear;}
   .needle::after{
     content:""; position:absolute; bottom:-3px; left:50%;
     width:5px; height:5px; border-radius:50%;
@@ -1710,6 +1713,10 @@
           <div class="menu-row" id="bioRow" style="display:none;">
             <span>Face ID</span>
             <button class="theme-btn" id="bioToggle" title="Face ID" aria-label="Face ID">☺</button>
+          </div>
+          <div class="menu-row" id="compassRow" style="display:none;">
+            <span>Live compass</span>
+            <button class="theme-btn" id="compassToggle" title="Live compass" aria-label="Live compass">◎</button>
           </div>
         </div>
       </div>
@@ -3320,6 +3327,32 @@ bioToggle.addEventListener('click', async () => {
   }
 });
 
+// Only offer this where the API exists at all — desktop browsers and
+// devices with no orientation sensor never see the toggle.
+if(supportsOrientation()){
+  document.getElementById('compassRow').style.display = 'flex';
+}
+document.getElementById('compassToggle').addEventListener('click', async () => {
+  const btn = document.getElementById('compassToggle');
+  if(liveCompassActive || liveCompassPending){
+    disableLiveCompass();
+    return;
+  }
+  btn.disabled = true;
+  refreshCompassToggleUI();
+  try{
+    const started = await enableLiveCompass();
+    if(!started){
+      const status = document.getElementById('statusLine');
+      if(status) status.textContent = "Couldn't enable the live compass — permission was denied or it's not supported here.";
+    }
+    liveCompassPending = started;
+    refreshCompassToggleUI();
+  }finally{
+    btn.disabled = false;
+  }
+});
+
 bioEnable.addEventListener('click', async () => {
   bioEnable.disabled = true;
   bioEnable.textContent = 'Waiting…';
@@ -3858,17 +3891,151 @@ function markRowHTML(id){
   return `<div class="card-marks">${stars}${journal}</div>`;
 }
 
-function updateCompass(items){
+/* ---------- live compass (device heading) ----------
+   Without this, the needle only ever points at a fixed geographic bearing —
+   correct in absolute terms, but meaningless as "which way do I turn" unless
+   you happen to be facing north. With a device heading, the needle instead
+   shows the bearing relative to which way the phone is actually pointed.
+
+   iOS and Android expose this differently and neither can be verified from
+   a sandbox with no physical device or sensors — this is written with real
+   fallbacks, but it's the one part of this app that most needs testing on
+   an actual phone rather than trusted on my say-so. */
+let deviceHeading = null;      // smoothed compass heading of the device, 0=N
+let smoothHeading = null;      // internal smoothing state
+let liveCompassActive = false;
+let liveCompassPending = false;
+let lastDestBearing = null;    // absolute bearing (0=N) to the current nearest pick
+
+function supportsOrientation(){
+  return typeof DeviceOrientationEvent !== 'undefined';
+}
+function needsIOSPermission(){
+  return supportsOrientation() && typeof DeviceOrientationEvent.requestPermission === 'function';
+}
+
+function handleOrientation(e){
+  let heading = null;
+  if(typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)){
+    // iOS Safari gives heading directly, already true-north-referenced.
+    heading = e.webkitCompassHeading;
+  } else if(e.absolute && typeof e.alpha === 'number' && !isNaN(e.alpha)){
+    // Standard event: alpha increases counter-clockwise from device start
+    // orientation; `absolute` means that reference is true north.
+    heading = (360 - e.alpha) % 360;
+  }
+  if(heading == null) return;
+
+  // Raw sensor readings are noisy — smooth with a short exponential filter,
+  // taking the shorter path across the 0°/360° wrap so it doesn't spin the
+  // long way around near north.
+  if(smoothHeading == null){
+    smoothHeading = heading;
+  } else {
+    let diff = heading - smoothHeading;
+    if(diff > 180) diff -= 360;
+    if(diff < -180) diff += 360;
+    smoothHeading += diff * 0.25;
+  }
+  deviceHeading = (smoothHeading + 360) % 360;
+
+  if(!liveCompassActive){
+    liveCompassActive = true;
+    liveCompassPending = false;
+    document.getElementById('needle').classList.add('live');
+    refreshCompassToggleUI();
+  }
+  renderNeedle();
+}
+
+function renderNeedle(){
   const needle = document.getElementById("needle");
+  if(!needle) return;
+  if(lastDestBearing == null) return;
+  const rotation = (liveCompassActive && deviceHeading != null)
+    ? (lastDestBearing - deviceHeading + 360) % 360
+    : lastDestBearing;
+  needle.style.transform = `translate(-50%,-100%) rotate(${rotation}deg)`;
+}
+
+async function enableLiveCompass(){
+  if(!supportsOrientation()) return false;
+  if(needsIOSPermission()){
+    // Must be called directly inside a user-gesture handler on iOS, or the
+    // browser silently rejects it — this is why it's wired to a tap on the
+    // settings menu row, not called automatically on load.
+    try{
+      const res = await DeviceOrientationEvent.requestPermission();
+      if(res !== 'granted') return false;
+    }catch(err){
+      console.warn('Compass permission request failed:', err);
+      return false;
+    }
+  }
+  liveCompassPending = true;
+  window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+  window.addEventListener('deviceorientation', handleOrientation, true);
+
+  // If nothing fires within a few seconds, there's likely no real sensor —
+  // fall back cleanly rather than leave the toggle stuck on "connecting".
+  setTimeout(() => {
+    if(liveCompassPending && !liveCompassActive){
+      liveCompassPending = false;
+      window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
+      window.removeEventListener('deviceorientation', handleOrientation, true);
+      refreshCompassToggleUI();
+      const status = document.getElementById('statusLine');
+      if(status) status.textContent = "Couldn't detect a compass sensor on this device.";
+    }
+  }, 3000);
+  return true;
+}
+
+function disableLiveCompass(){
+  window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
+  window.removeEventListener('deviceorientation', handleOrientation, true);
+  liveCompassActive = false;
+  liveCompassPending = false;
+  deviceHeading = null;
+  smoothHeading = null;
+  const needle = document.getElementById('needle');
+  if(needle) needle.classList.remove('live');
+  refreshCompassToggleUI();
+  renderNeedle();
+}
+
+function refreshCompassToggleUI(){
+  const btn = document.getElementById('compassToggle');
+  if(!btn) return;
+  if(liveCompassActive){
+    btn.textContent = '◉';
+    btn.classList.add('on');
+    btn.title = 'Live compass is on — tap to turn off';
+  } else if(liveCompassPending){
+    btn.textContent = '◌';
+    btn.classList.remove('on');
+    btn.title = 'Connecting to compass sensor…';
+  } else {
+    btn.textContent = '◎';
+    btn.classList.remove('on');
+    btn.title = 'Live compass is off — tap to use your phone\'s heading';
+  }
+}
+
+
+
+function updateCompass(items){
   const compassLabel = document.getElementById("compassLabel");
   if(!userLoc || items.length === 0){
+    lastDestBearing = null;
     compassLabel.textContent = userLoc ? "no matches" : "no location";
+    renderNeedle();
     return;
   }
   const nearestOpen = items.find(p => openStatus(p.hours).open !== false) || items[0];
-  const brg = bearing(userLoc.lat, userLoc.lng, nearestOpen.lat, nearestOpen.lng);
-  needle.style.transform = `translate(-50%,-100%) rotate(${brg}deg)`;
+  lastDestBearing = bearing(userLoc.lat, userLoc.lng, nearestOpen.lat, nearestOpen.lng);
   compassLabel.textContent = nearestOpen.name.length > 22 ? nearestOpen.name.slice(0,20) + "…" : nearestOpen.name;
+  renderNeedle();
 }
 
 /* ---------- refresh ----------
