@@ -673,7 +673,7 @@
   }
   /* Continuous device-heading updates need to track rotation closely rather
      than ease into place like an occasional target change does. */
-  .needle.live{transition:transform .12s linear;}
+  .needle.live{transition:transform .2s linear;}
   .needle::after{
     content:""; position:absolute; bottom:-3px; left:50%;
     width:5px; height:5px; border-radius:50%;
@@ -3903,6 +3903,7 @@ function markRowHTML(id){
    an actual phone rather than trusted on my say-so. */
 let deviceHeading = null;      // smoothed compass heading of the device, 0=N
 let smoothHeading = null;      // internal smoothing state
+let lastNeedleRenderAt = 0;    // throttles DOM writes from rapid sensor events
 let liveCompassActive = false;
 let liveCompassPending = false;
 let lastDestBearing = null;    // absolute bearing (0=N) to the current nearest pick
@@ -3931,16 +3932,21 @@ function handleOrientation(e){
   lastOrientationDebug = {webkitCompassHeading: e.webkitCompassHeading, alpha: e.alpha, absolute: e.absolute};
   if(heading == null) return;
 
-  // Raw sensor readings are noisy — smooth with a short exponential filter,
+  // Raw sensor readings are noisy — smooth with an exponential filter,
   // taking the shorter path across the 0°/360° wrap so it doesn't spin the
-  // long way around near north.
+  // long way around near north. Large single-step jumps are usually
+  // momentary magnetic interference (metal, electronics nearby) rather
+  // than genuine fast rotation, so those get damped much harder — real
+  // sustained turning still catches up within a few readings, but one bad
+  // reading can't make the needle visibly snap.
   if(smoothHeading == null){
     smoothHeading = heading;
   } else {
     let diff = heading - smoothHeading;
     if(diff > 180) diff -= 360;
     if(diff < -180) diff += 360;
-    smoothHeading += diff * 0.25;
+    const alpha = Math.abs(diff) > 60 ? 0.06 : 0.15;
+    smoothHeading += diff * alpha;
   }
   deviceHeading = (smoothHeading + 360) % 360;
 
@@ -3950,7 +3956,14 @@ function handleOrientation(e){
     document.getElementById('needle').classList.add('live');
     refreshCompassToggleUI();
   }
-  renderNeedle();
+  // Sensor events can fire much faster than the eye needs updates —
+  // capping DOM writes to ~12/sec cuts jank without any visible lag, since
+  // the CSS transition below fills in the motion between updates anyway.
+  const now = performance.now();
+  if(now - lastNeedleRenderAt > 80){
+    lastNeedleRenderAt = now;
+    renderNeedle();
+  }
 }
 
 function renderNeedle(){
