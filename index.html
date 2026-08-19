@@ -3914,7 +3914,11 @@ function needsIOSPermission(){
   return supportsOrientation() && typeof DeviceOrientationEvent.requestPermission === 'function';
 }
 
+let lastOrientationDebug = null;
+let orientationEventsSeen = 0;
+
 function handleOrientation(e){
+  orientationEventsSeen++;
   let heading = null;
   if(typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)){
     // iOS Safari gives heading directly, already true-north-referenced.
@@ -3924,6 +3928,7 @@ function handleOrientation(e){
     // orientation; `absolute` means that reference is true north.
     heading = (360 - e.alpha) % 360;
   }
+  lastOrientationDebug = {webkitCompassHeading: e.webkitCompassHeading, alpha: e.alpha, absolute: e.absolute};
   if(heading == null) return;
 
   // Raw sensor readings are noisy — smooth with a short exponential filter,
@@ -3966,26 +3971,40 @@ async function enableLiveCompass(){
     // settings menu row, not called automatically on load.
     try{
       const res = await DeviceOrientationEvent.requestPermission();
-      if(res !== 'granted') return false;
+      if(res !== 'granted'){
+        alert(`Compass permission was not granted (response: "${res}"). If you tapped "Don't Allow" by mistake, reload the page and try again.`);
+        return false;
+      }
     }catch(err){
       console.warn('Compass permission request failed:', err);
+      alert(`Compass permission request itself failed: ${err.message}`);
       return false;
     }
   }
   liveCompassPending = true;
+  orientationEventsSeen = 0;
+  lastOrientationDebug = null;
   window.addEventListener('deviceorientationabsolute', handleOrientation, true);
   window.addEventListener('deviceorientation', handleOrientation, true);
 
   // If nothing fires within a few seconds, there's likely no real sensor —
   // fall back cleanly rather than leave the toggle stuck on "connecting".
+  // Two genuinely different failures get two different messages: no events
+  // at all (permission/access problem) vs events arriving with no usable
+  // heading value in them (a parsing problem on my end, and worth knowing
+  // the raw values for).
   setTimeout(() => {
     if(liveCompassPending && !liveCompassActive){
       liveCompassPending = false;
       window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
       window.removeEventListener('deviceorientation', handleOrientation, true);
       refreshCompassToggleUI();
-      const status = document.getElementById('statusLine');
-      if(status) status.textContent = "Couldn't detect a compass sensor on this device.";
+      if(orientationEventsSeen === 0){
+        alert("No orientation events arrived at all in 3 seconds after permission was granted. This points at iOS/Safari blocking delivery in this context (standalone home-screen mode is the most likely reason) rather than anything the app is doing wrong with the data.");
+      } else if(lastOrientationDebug){
+        const d = lastOrientationDebug;
+        alert(`Sensor events arrived (${orientationEventsSeen} of them) but none had a usable heading.\nwebkitCompassHeading: ${d.webkitCompassHeading}\nalpha: ${d.alpha}\nabsolute: ${d.absolute}\n\nPlease share these three values — this tells me exactly what to fix.`);
+      }
     }
   }, 3000);
   return true;
