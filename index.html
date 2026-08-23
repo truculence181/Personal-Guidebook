@@ -1147,6 +1147,53 @@
     100%{outline-color:transparent;}
   }
 
+  /* ---------- LOADING SKELETONS ----------
+     Built from the same --surface/--line tokens every card already uses,
+     so this restyles automatically across all nine skins with no extra
+     per-skin work — same principle as everything else in the theme system. */
+  .card.skeleton{
+    cursor:default;
+    pointer-events:none;
+  }
+  .card.skeleton:hover, .card.skeleton:active{
+    transform:none;
+    box-shadow:var(--shadow-sm);
+  }
+  .skel-cover{
+    aspect-ratio:16/10;
+    background:linear-gradient(90deg, var(--line) 25%, var(--bg) 50%, var(--line) 75%);
+    background-size:200% 100%;
+    animation:shimmer 1.5s ease-in-out infinite;
+  }
+  .skel-body{padding:14px 16px 4px;}
+  .skel-line{
+    height:12px;
+    border-radius:6px;
+    margin-bottom:8px;
+    background:linear-gradient(90deg, var(--line) 25%, var(--bg) 50%, var(--line) 75%);
+    background-size:200% 100%;
+    animation:shimmer 1.5s ease-in-out infinite;
+  }
+  .skel-line.w60{width:60%;}
+  .skel-line.w35{width:35%; height:10px;}
+  .skel-line.w80{width:80%;}
+  .skel-meta{
+    display:flex; gap:8px;
+    padding:11px 16px;
+    border-top:1px solid var(--line);
+  }
+  .skel-pill{
+    width:64px; height:13px;
+    border-radius:20px;
+    background:linear-gradient(90deg, var(--line) 25%, var(--bg) 50%, var(--line) 75%);
+    background-size:200% 100%;
+    animation:shimmer 1.5s ease-in-out infinite;
+  }
+  @keyframes shimmer{
+    0%{background-position:200% 0;}
+    100%{background-position:-200% 0;}
+  }
+
   /* ---------- SECTION LABEL ---------- */
   .section-row{
     display:flex; align-items:center; gap:12px;
@@ -4346,6 +4393,36 @@ function sectionLabelText(count){
 }
 
 /* ---------- rendering ---------- */
+/* ---------- loading skeletons ----------
+   The only real gap in the app's animation: while a search, locate, or
+   category/radius fetch is in flight, the list previously just sat there
+   showing whatever was already loaded (or nothing) until results arrived,
+   with the only feedback being text in the status line. These fill that
+   silence with something that visibly reflects "working", replaced the
+   moment render() runs with real data. */
+function showSkeletonCards(){
+  const list = document.getElementById('cardList');
+  if(!list) return;
+  const pager = document.getElementById('pager');
+  if(pager) pager.innerHTML = '';
+  const label = document.getElementById('sectionLabel');
+  if(label) label.textContent = 'Loading…';
+  list.innerHTML = Array.from({length: 4}, () => `
+    <div class="card skeleton" aria-hidden="true">
+      <div class="skel-cover"></div>
+      <div class="skel-body">
+        <div class="skel-line w60"></div>
+        <div class="skel-line w35"></div>
+      </div>
+      <div class="skel-line w80" style="margin:0 16px 12px;"></div>
+      <div class="skel-meta">
+        <div class="skel-pill"></div>
+        <div class="skel-pill" style="width:44px;"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
 function render(){
   const list = document.getElementById("cardList");
   const label = document.getElementById("sectionLabel");
@@ -4823,6 +4900,7 @@ async function refreshPlaces(){
   refreshing = true;
   try{
     statusLine.textContent = "Refreshing…";
+    showSkeletonCards();
     const places = await fetchLivePlaces(lastCenter.lat, lastCenter.lng);
     activePlaces = places;
     resetPage();
@@ -4981,6 +5059,7 @@ document.getElementById("locateBtn").addEventListener("click", () => {
       refreshHeaderWeather(userLoc.lat, userLoc.lng);
 
       try{
+        showSkeletonCards();
         const livePlaces = await fetchLivePlaces(userLoc.lat, userLoc.lng);
         activePlaces = livePlaces;
         resetPage();
@@ -5054,6 +5133,7 @@ async function runSearch(){
     document.getElementById("sourceNote").textContent = `Showing community-mapped spots near ${place.label}`;
     statusLine.textContent = "Fetching nearby spots…";
     refreshHeaderWeather(place.lat, place.lng);
+    showSkeletonCards();
 
     try{
       const livePlaces = await fetchLivePlaces(place.lat, place.lng);
@@ -5092,6 +5172,7 @@ document.getElementById("radiusSelect").addEventListener("change", async (e) => 
   if(searchRadiusMi > prev && lastCenter){
     const statusLine = document.getElementById("statusLine");
     statusLine.textContent = `Widening to ${searchRadiusMi} miles…`;
+    showSkeletonCards();
     try{
       const places = await fetchLivePlaces(lastCenter.lat, lastCenter.lng);
       activePlaces = places;
@@ -5207,6 +5288,7 @@ catSelect.addEventListener("change", async () => {
   if(lastCenter && activeCat !== 'all' && prev !== 'all'){
     const statusLine = document.getElementById("statusLine");
     statusLine.textContent = `Loading ${CAT_LABEL[activeCat]}…`;
+    showSkeletonCards();
     try{
       const places = await fetchLivePlaces(lastCenter.lat, lastCenter.lng);
       activePlaces = places;
