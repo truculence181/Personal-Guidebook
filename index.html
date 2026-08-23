@@ -5264,19 +5264,30 @@ document.getElementById("surpriseBtn").addEventListener("click", () => {
     statusLine.textContent = "Nothing loaded yet — locate or search first.";
     return;
   }
-  const open = activePlaces.filter(p => openStatus(p.hours).open === true);
-  const pool = open.length ? open : activePlaces;
+
+  // Surprise from what's currently in view, not the whole unfiltered list —
+  // picking Nightlife and then getting a random museum defeats the point
+  // of having chosen a category at all.
+  const scoped = activeCat === "all" ? activePlaces : activePlaces.filter(p => p.cat === activeCat);
+  if(!scoped.length){
+    statusLine.textContent = `Nothing in ${CAT_LABEL[activeCat] || 'this category'} right now — try another filter.`;
+    return;
+  }
+  const open = scoped.filter(p => openStatus(p.hours).open === true);
+  const pool = open.length ? open : scoped;
   const pick = pool[Math.floor(Math.random() * pool.length)];
 
-  // Clear anything that might be hiding the pick, then jump to its page.
+  // Only touch Open Now if the pick would otherwise be invisible under it —
+  // category, radius, and every other choice stay exactly as they were.
   activeView = "browse";
-  activeCat = "all";
-  openOnly = false;
-  listQuery.pinned = ''; listQuery.recent = '';
+  if(openOnly && !open.length) openOnly = false;
   syncControls();
 
-  // Find which page it lands on so it's actually visible after render.
+  // Mirror render()'s own browse-view filter exactly, so the page/index
+  // computed here matches what actually ends up on screen.
   let items = activePlaces.slice();
+  if(activeCat !== "all") items = items.filter(p => p.cat === activeCat);
+  if(openOnly) items = items.filter(p => openStatus(p.hours).open === true);
   if(userLoc){
     items.forEach(p => p._dist = haversine(userLoc.lat, userLoc.lng, p.lat, p.lng));
     items = items.filter(p => p._dist <= searchRadiusMi + 0.5);
