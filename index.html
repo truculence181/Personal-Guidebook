@@ -884,6 +884,51 @@
   #catSelect:disabled, #skinSelect:disabled, #radiusSelect:disabled{cursor:default;}
   #catSelect option, #skinSelect option, #radiusSelect option{background:var(--surface); color:var(--ink);}
 
+  .chip.recent-chip{color:var(--accent-deep);}
+  .chip.recent-chip.active{background:var(--accent); border-color:var(--accent); color:#fff;}
+
+  .list-search{
+    display:flex; align-items:center; gap:6px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:0 8px 0 12px;
+    margin-bottom:14px;
+    box-shadow:var(--shadow-xs);
+  }
+  .list-search input{
+    flex:1;
+    background:none; border:none;
+    padding:11px 0;
+    font-family:var(--font-body);
+    font-size:14px;
+    color:var(--ink);
+  }
+  .list-search input:focus{outline:none;}
+  .list-search input::placeholder{color:var(--ink-faint);}
+  #listSearchClear{
+    background:none; border:none; cursor:pointer;
+    font-size:19px; line-height:1;
+    color:var(--ink-faint);
+    padding:4px 6px;
+    min-width:24px; min-height:24px;
+  }
+  #listSearchClear:active{color:var(--ink);}
+
+  .clear-recent{
+    width:100%;
+    background:none;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:11px;
+    margin-top:10px;
+    font-family:var(--font-label);
+    font-size:11px; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--ink-faint);
+    cursor:pointer;
+  }
+  .clear-recent:active{color:var(--rust);}
+
   .chip-divider{
     width:1px;
     align-self:stretch;
@@ -1829,6 +1874,7 @@
       <button class="chip pin-chip" id="viewPinned">★ Pinned</button>
       <button class="chip plan-chip" id="viewPlan">◷ Day plan</button>
       <button class="chip saved-chip" id="viewSaved">❖ Saved</button>
+      <button class="chip recent-chip" id="viewRecent">◴ Recent</button>
       <span class="chip-divider"></span>
       <div class="select-wrap">
         <select id="catSelect" aria-label="Category">
@@ -1864,6 +1910,10 @@
         <option value="100">100</option>
       </select>
     </div>
+  </div>
+  <div class="list-search" id="listSearch" style="display:none;">
+    <input type="text" id="listSearchInput" placeholder="Search…">
+    <button id="listSearchClear" aria-label="Clear search">×</button>
   </div>
   <div id="cardList"></div>
   <div id="pager"></div>
@@ -2288,6 +2338,48 @@ let myMarks = {};   // id -> {stars: 0-5}
    browsing. Entries persist even if you later unpin; they just become
    inaccessible until you pin the place again, rather than being deleted. */
 let journalStore = {};  // id -> array of {id, date, text}
+
+/* ---------- recently viewed ----------
+   A place you looked at closely but didn't pin is easy to lose — you
+   remember seeing it, not what it was called. Recording opens gives you a
+   way back without requiring a decision at the moment of browsing.
+
+   Capped and de-duplicated: a place opened twice moves to the top rather
+   than appearing twice, so the list stays a history of *places*, not of
+   taps. */
+const RECENT_LIMIT = 40;
+let recentStore = [];   // most-recent-first array of place objects
+
+function recordView(place){
+  if(!place || !place.id) return;
+  const clean = stripPlace(place);
+  clean._viewedAt = Date.now();
+  recentStore = [clean, ...recentStore.filter(p => p.id !== clean.id)].slice(0, RECENT_LIMIT);
+  savePins();
+}
+function clearRecent(){
+  if(!confirm('Clear your recently viewed list?')) return;
+  recentStore = [];
+  savePins();
+  render();
+}
+
+/* ---------- list search ----------
+   One query string per view, so switching between Pinned and Recently
+   viewed doesn't carry a stale filter across. */
+let listQuery = {pinned:'', recent:'', journal:''};
+
+function matchesQuery(place, q){
+  if(!q) return true;
+  const needle = q.toLowerCase();
+  if((place.name || '').toLowerCase().includes(needle)) return true;
+  if((CAT_LABEL[place.cat] || '').toLowerCase().includes(needle)) return true;
+  if((place.blurb || '').toLowerCase().includes(needle)) return true;
+  // Searching pinned places should also reach into what you wrote about
+  // them — "the place with the good patio" is often in the journal, not
+  // in the name.
+  return journalFor(place.id).some(e => (e.text || '').toLowerCase().includes(needle));
+}
 function journalFor(id){ return journalStore[id] || []; }
 function escapeHtml(str){
   const div = document.createElement('div');
@@ -3152,7 +3244,7 @@ async function unwrapDEK(key, payload){
 // The vault holds both pins and the day plan. Older installs stored a bare
 // pins object, so unpack handles either shape.
 function vaultPayload(){
-  return {__v: 6, pins: pinnedStore, planDays: planDays, marks: myMarks, journal: journalStore, savedPlans: savedPlans};
+  return {__v: 7, pins: pinnedStore, planDays: planDays, marks: myMarks, journal: journalStore, savedPlans: savedPlans, recent: recentStore};
 }
 function unpackVault(obj){
   if(obj && obj.__v >= 2){
@@ -3160,6 +3252,7 @@ function unpackVault(obj){
     myMarks = obj.marks || {};
     journalStore = obj.journal || {};
     savedPlans = Array.isArray(obj.savedPlans) ? obj.savedPlans : [];
+    recentStore = Array.isArray(obj.recent) ? obj.recent : [];
 
     if(Array.isArray(obj.planDays) && obj.planDays.length){
       // v6+: already multi-day.
@@ -3190,6 +3283,7 @@ function unpackVault(obj){
     myMarks = {};
     journalStore = {};
     savedPlans = [];
+    recentStore = [];
     planDays = [emptyPlan()];
   }
   activeDay = 0;
@@ -3941,7 +4035,12 @@ function renderPlan(list, label){
 }
 
 function sectionLabelText(count){
-  if(activeView === "pinned") return "Pinned places";
+  if(activeView === "pinned"){
+    return listQuery.pinned ? `Pinned · ${count} match${count===1?'':'es'}` : "Pinned places";
+  }
+  if(activeView === "recent"){
+    return listQuery.recent ? `Recent · ${count} match${count===1?'':'es'}` : "Recently viewed";
+  }
   const cat = activeCat === "all" ? "Nearby" : CAT_LABEL[activeCat];
   const bits = [cat];
   if(openOnly) bits.push("open now");
@@ -3969,6 +4068,11 @@ function render(){
     items = Object.values(pinnedStore);
     // Your own ratings are the most useful ordering for places you've saved.
     items.sort((a,b) => markFor(b.id).stars - markFor(a.id).stars);
+    if(listQuery.pinned) items = items.filter(p => matchesQuery(p, listQuery.pinned));
+  } else if(activeView === "recent"){
+    // Already stored most-recent-first; no re-sorting.
+    items = recentStore.slice();
+    if(listQuery.recent) items = items.filter(p => matchesQuery(p, listQuery.recent));
   } else {
     items = activePlaces.slice();
     if(activeCat !== "all") items = items.filter(p => p.cat === activeCat);
@@ -3978,11 +4082,11 @@ function render(){
   if(userLoc){
     items.forEach(p => p._dist = haversine(userLoc.lat, userLoc.lng, p.lat, p.lng));
     // Respect the distance filter, but never hide something you saved.
-    if(activeView !== "pinned"){
+    if(activeView !== "pinned" && activeView !== "recent"){
       items = items.filter(p => p._dist <= searchRadiusMi + 0.5);
     }
     items.sort((a,b) => a._dist - b._dist);
-  } else if(activeView !== "pinned"){
+  } else if(activeView !== "pinned" && activeView !== "recent"){
     items.sort((a,b) => (b.rating||0) - (a.rating||0));
   }
   label.textContent = sectionLabelText(items.length);
@@ -3996,8 +4100,13 @@ function render(){
   const pageItems = items.slice(page * pageSize, (page + 1) * pageSize);
 
   if(items.length === 0){
-    const msg = activeView === "pinned"
+    const q = listQuery[activeView];
+    const msg = q
+      ? `No matches for “${escapeHtml(q)}”.`
+      : activeView === "pinned"
       ? "Nothing pinned yet — tap the ☆ on any place to save it here."
+      : activeView === "recent"
+      ? "Nothing here yet — places you open will show up so you can find them again."
       : openOnly
         ? "Nothing open right now in this category — try turning off Open now."
         : `Nothing found within ${searchRadiusMi} miles — try a wider radius or another category.`;
@@ -4019,7 +4128,7 @@ function render(){
     const callHtml = p.phone ? `<a href="tel:${p.phone.replace(/\s/g,'')}">Call</a>` : "";
     const isPinned = pinnedIds.has(p.id);
     return `
-      <div class="card" data-map="${mapUrl}">
+      <div class="card" data-map="${mapUrl}" data-id="${p.id}">
         <div style="position:relative;">
           ${coverFor(p)}
           <button class="card-pin ${isPinned?'pinned':''}" data-id="${p.id}" title="Pin this place">${isPinned ? '★' : '☆'}</button>
@@ -4132,6 +4241,11 @@ function render(){
     card.addEventListener("click", (e) => {
       if(e.target.closest(".card-pin") || e.target.closest(".card-add") || e.target.closest(".slot-picker")
          || e.target.closest(".card-actions-ride") || e.target.closest(".ride-picker")) return;
+      // Opening a place in Maps is the clearest signal of real interest —
+      // stronger than merely scrolling past it — so that's what gets
+      // recorded rather than every card that happens to render.
+      const place = items.find(p => p.id === card.dataset.id);
+      if(place) recordView(place);
       markHandoff();
       if(e.target.closest("a")) return;
       window.location.href = card.dataset.map;
@@ -4139,6 +4253,15 @@ function render(){
   });
 
   renderPager(totalItems, pageCount);
+
+  // Offer a way to wipe the history — it's a record of where you've been
+  // looking, which some people will reasonably want to clear.
+  if(activeView === 'recent' && recentStore.length){
+    const pager = document.getElementById('pager');
+    pager.insertAdjacentHTML('beforeend',
+      '<button class="clear-recent" id="clearRecentBtn">Clear history</button>');
+    document.getElementById('clearRecentBtn').addEventListener('click', clearRecent);
+  }
 
   // Keep a drawer open across re-renders triggered from inside it.
   if(openDrawerId){
@@ -4695,12 +4818,14 @@ CATEGORIES.forEach(cat => {
 const viewPinned = document.getElementById("viewPinned");
 const viewPlan = document.getElementById("viewPlan");
 const viewSaved = document.getElementById("viewSaved");
+const viewRecent = document.getElementById("viewRecent");
 const openNowBtn = document.getElementById("openNow");
 
 function syncControls(){
   viewPinned.classList.toggle("active", activeView === "pinned");
   viewPlan.classList.toggle("active", activeView === "plan");
   viewSaved.classList.toggle("active", activeView === "saved");
+  viewRecent.classList.toggle("active", activeView === "recent");
   openNowBtn.classList.toggle("active", openOnly);
   catSelect.value = activeCat;
   // Category and distance don't apply to the saved lists, so dim them there.
@@ -4709,7 +4834,40 @@ function syncControls(){
   openNowBtn.disabled = activeView === "plan" || activeView === "saved";
   document.getElementById("radiusChips").style.opacity = browsing ? "" : ".4";
   document.querySelector(".select-wrap").style.opacity = browsing ? "" : ".4";
+  syncListSearch();
 }
+
+/* ---------- list search wiring ----------
+   One input serves both saved-list views. It re-reads its value from
+   whichever view is active, so switching tabs restores that view's own
+   query rather than leaking a filter across. */
+const listSearch = document.getElementById('listSearch');
+const listSearchInput = document.getElementById('listSearchInput');
+
+function syncListSearch(){
+  const searchable = activeView === 'pinned' || activeView === 'recent';
+  listSearch.style.display = searchable ? 'flex' : 'none';
+  if(!searchable) return;
+  listSearchInput.placeholder = activeView === 'pinned'
+    ? 'Search pinned places and journal…'
+    : 'Search recently viewed…';
+  const current = listQuery[activeView] || '';
+  if(listSearchInput.value !== current) listSearchInput.value = current;
+}
+listSearchInput.addEventListener('input', () => {
+  if(activeView !== 'pinned' && activeView !== 'recent') return;
+  listQuery[activeView] = listSearchInput.value.trim();
+  resetPage();
+  render();
+});
+document.getElementById('listSearchClear').addEventListener('click', () => {
+  if(activeView !== 'pinned' && activeView !== 'recent') return;
+  listQuery[activeView] = '';
+  listSearchInput.value = '';
+  resetPage();
+  render();
+  listSearchInput.focus();
+});
 
 function setView(v){
   activeView = (activeView === v) ? "browse" : v;
@@ -4720,6 +4878,7 @@ function setView(v){
 viewPinned.addEventListener("click", () => setView("pinned"));
 viewPlan.addEventListener("click", () => setView("plan"));
 viewSaved.addEventListener("click", () => setView("saved"));
+viewRecent.addEventListener("click", () => setView("recent"));
 openNowBtn.addEventListener("click", () => {
   if(activeView === "plan") return;
   openOnly = !openOnly;
