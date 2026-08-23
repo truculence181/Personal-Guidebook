@@ -2988,6 +2988,18 @@ function appleMapsURL(name, lat, lng){
   return `https://maps.apple.com/?q=${encodeURIComponent(name)}&sll=${lat},${lng}`;
 }
 
+// Prefers an actual menu URL; falls back to the general website only for
+// places where a menu wouldn't be the point anyway (OSM's website:menu tag
+// is restaurant/food-specific by convention). The label always reflects
+// which one it actually is — a homepage never gets called a "menu".
+function menuLinkFor(p){
+  if(p.menuUrl) return {url: p.menuUrl, label: 'Menu'};
+  if(p.website && (p.cat === 'food' || p.cat === 'coffee' || p.cat === 'bars')){
+    return {url: p.website, label: 'Website'};
+  }
+  return null;
+}
+
 // Both are plain deep links — no API key, no backend. Uber's is the more
 // robust of the two: no developer registration needed, and `pickup=my_location`
 // lets the Uber app read live GPS itself rather than us supplying a
@@ -3397,6 +3409,14 @@ async function fetchLivePlaces(lat, lon, radiusMi){
             blurb: describeTags(el.tags),
             hours: parseOsmHours(el.tags.opening_hours),
             phone: el.tags.phone || el.tags["contact:phone"] || null,
+            // website:menu is OSM's de-facto tag specifically for a menu
+            // URL — coverage is sparse (it's a convention, not universally
+            // adopted), so this falls back to the business's general
+            // website when no menu-specific link exists. The two are kept
+            // separate so the UI can be honest about which one it got
+            // rather than calling a homepage a "menu".
+            menuUrl: el.tags["website:menu"] || null,
+            website: el.tags.website || el.tags["contact:website"] || el.tags.url || null,
             photo: photoFor(el.tags),
             _wiki: wikiTitleFor(el.tags),
             _wikidata: wikidataIdFor(el.tags),
@@ -4500,6 +4520,8 @@ function render(){
     // Apple Maps: q= labels the pin, ll= drops it at the exact coordinates.
     const mapUrl = appleMapsURL(p.name, p.lat, p.lng);
     const callHtml = p.phone ? `<a href="tel:${p.phone.replace(/\s/g,'')}">Call</a>` : "";
+    const menu = menuLinkFor(p);
+    const menuHtml = menu ? `<a href="${menu.url}" target="_blank" rel="noopener noreferrer nofollow">${menu.label}</a>` : "";
     const isPinned = pinnedIds.has(p.id);
     return `
       <div class="card" data-map="${mapUrl}" data-id="${p.id}">
@@ -4524,6 +4546,7 @@ function render(){
         <div class="card-actions">
           <a href="${mapUrl}" rel="noopener">Directions</a>
           ${callHtml}
+          ${menuHtml}
           <button class="card-actions-ride" data-id="${p.id}" aria-expanded="false" aria-label="Ride options to ${p.name}">Ride</button>
         </div>
         ${ridePickerHTML(p.id, p.lat, p.lng, p.name, userLoc)}
