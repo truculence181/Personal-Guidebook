@@ -11,7 +11,7 @@
   default-src 'none';
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src https://fonts.gstatic.com;
-  connect-src https://nominatim.openstreetmap.org https://overpass-api.de https://overpass.kumi.systems https://overpass.openstreetmap.ru https://*.wikipedia.org https://www.wikidata.org https://api.open-meteo.com;
+  connect-src https://nominatim.openstreetmap.org https://overpass-api.de https://overpass.kumi.systems https://overpass.openstreetmap.ru https://*.wikipedia.org https://www.wikidata.org https://api.open-meteo.com https://api.panoramax.xyz;
   img-src 'self' data: https:;
   script-src 'self' 'unsafe-inline';
   worker-src 'self';
@@ -2173,7 +2173,7 @@
   <div id="cardList"></div>
   <div id="pager"></div>
 
-  <footer>vagatio · live data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></footer>
+  <footer>vagatio · live data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · photos via <a href="https://panoramax.fr" target="_blank" rel="noopener">Panoramax</a> (CC BY-SA)</footer>
 </main>
 
 <script>
@@ -3300,6 +3300,91 @@ async function attachWikiPhotos(places){
 async function enrichPhotos(places){
   await attachWikiPhotos(places);
   await attachWikidataPhotos(places);
+  await attachPanoramaxPhotos(places);
+  return places;
+}
+
+/* ---------- Panoramax: open, non-corporate street-level imagery ----------
+   IGN (France's national mapping agency) + OpenStreetMap France, moving to
+   an independent foundation — genuinely open infrastructure, not just an
+   open license on a corporate backend. No key needed for search/read.
+
+   Two deliberate scope limits, both load-bearing:
+
+   1. Category-restricted. This is street photography, not venue photography
+      — a photo of the sidewalk outside a restaurant is often useless, but a
+      photo of a trailhead or a viewpoint usually IS the thing itself. Only
+      requested for categories where that distinction favors a real photo.
+
+   2. Volume-capped. Unlike the Wikipedia/Wikidata passes (batched, one call
+      covers 50 places) or Open-Meteo (one call covers up to 1000 points),
+      Panoramax's STAC /search takes one bounding box per call — there's no
+      multi-point batch endpoint here. Fetching this for every place on a
+      100-item page would mean up to 100 sequential requests. Capped to the
+      first 20 still-missing places per enrichment pass.
+
+   Field names below are the STAC standard plus one Panoramax-specific
+   property confirmed from their changelog (`geovisio:thumbnail`, added
+   specifically so simpler clients don't need to parse the full asset
+   structure) — but this hasn't been verified against a live response from
+   this sandbox, so it's written defensively: several plausible asset
+   locations are checked rather than trusting exactly one. */
+const PANORAMAX_CATS = new Set(['outdoors', 'scenic', 'historic']);
+const PANORAMAX_CAP = 20;
+
+function panoramaxThumb(feature){
+  const props = feature.properties || {};
+  if(props['geovisio:thumbnail']) return props['geovisio:thumbnail'];
+  const assets = feature.assets || {};
+  for(const key of ['thumb', 'thumbnail', 'sd', 'hd']){
+    if(assets[key] && assets[key].href) return assets[key].href;
+  }
+  return null;
+}
+
+async function fetchPanoramaxPhoto(lat, lng){
+  // ~0.0005° square is roughly a 50-55m box at most latitudes — same
+  // "immediate vicinity" scale Mapillary's own radius search used.
+  const d = 0.0005;
+  const bbox = [lng - d, lat - d, lng + d, lat + d].join(',');
+  const url = `https://api.panoramax.xyz/api/search?bbox=${bbox}&limit=5`;
+  const t = withTimeout(null, 6000);
+  try{
+    const resp = await fetch(url, {signal: t.signal});
+    t.clear();
+    if(!resp.ok) return null;
+    const data = await resp.json();
+    const features = data.features || [];
+    if(!features.length) return null;
+
+    // Nearest of the returned candidates, not just the first result.
+    let best = null, bestDist = Infinity;
+    for(const f of features){
+      const coords = f.geometry && f.geometry.coordinates;
+      if(!coords) continue;
+      const dist = haversine(lat, lng, coords[1], coords[0]);
+      if(dist < bestDist){ bestDist = dist; best = f; }
+    }
+    if(!best) return null;
+    return panoramaxThumb(best);
+  }catch(err){
+    t.clear();
+    console.warn('Panoramax fetch failed:', err);
+    return null;
+  }
+}
+
+async function attachPanoramaxPhotos(places){
+  const pending = places.filter(p => !p.photo && PANORAMAX_CATS.has(p.cat)).slice(0, PANORAMAX_CAP);
+  if(!pending.length) return places;
+  // Sequential, not parallel — this is the one photo source with no batch
+  // endpoint, so it's already the most request-heavy path; running all 20
+  // at once would spike concurrent connections for comparatively little
+  // gain over a short queue.
+  for(const p of pending){
+    const url = await fetchPanoramaxPhoto(p.lat, p.lng);
+    if(url) p.photo = url;
+  }
   return places;
 }
 // wikidata tag (a Q-id) without a full Wikipedia article in any language OSM
