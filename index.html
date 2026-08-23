@@ -1321,6 +1321,36 @@
     overflow:hidden;
     margin-bottom:16px;
   }
+  .day-tabs{
+    display:flex; gap:6px;
+    padding:12px 12px 0;
+    overflow-x:auto;
+    -ms-overflow-style:none; scrollbar-width:none;
+  }
+  .day-tabs::-webkit-scrollbar{display:none;}
+  .day-tab{
+    flex-shrink:0;
+    display:flex; flex-direction:column; gap:2px;
+    background:var(--bg);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:7px 12px;
+    cursor:pointer;
+    text-align:left;
+    font-family:var(--font-label);
+  }
+  .day-tab-n{font-size:11px; font-weight:600; color:var(--ink);}
+  .day-tab-d{font-size:9.5px; color:var(--ink-faint);}
+  .day-tab.on{background:var(--ink); border-color:var(--ink);}
+  .day-tab.on .day-tab-n{color:var(--bg);}
+  .day-tab.on .day-tab-d{color:var(--bg); opacity:.75;}
+  .day-tab.add{
+    align-items:center; justify-content:center;
+    font-size:15px; color:var(--ink-soft);
+    padding:7px 13px;
+  }
+  .day-tab:active{transform:scale(0.97);}
+
   .plan-head{
     display:flex; align-items:center; justify-content:space-between; gap:12px;
     padding:16px;
@@ -2005,7 +2035,58 @@ function emptyPlan(){
   const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   return {date: iso, stops: []};
 }
-let dayPlan = emptyPlan();
+/* ---------- multi-day trips ----------
+   A trip is an ordered list of days. `dayPlan` remains a live *reference* to
+   whichever day is active, so every existing read of `dayPlan.stops` /
+   `dayPlan.date` keeps working untouched — only reassignments route through
+   setDayPlan() to keep the array and the reference in sync. */
+let planDays = [emptyPlan()];
+let activeDay = 0;
+let dayPlan = planDays[0];
+
+function setDayPlan(p){
+  planDays[activeDay] = p;
+  dayPlan = p;
+}
+function switchDay(i){
+  if(i < 0 || i >= planDays.length) return;
+  activeDay = i;
+  dayPlan = planDays[i];
+  render();
+}
+function addDay(){
+  // Default the new day to the day after the last one — trips are usually
+  // consecutive, and it's easier to change a date than to type one.
+  const last = planDays[planDays.length - 1];
+  const d = new Date(last.date + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  planDays.push({date: iso, stops: []});
+  activeDay = planDays.length - 1;
+  dayPlan = planDays[activeDay];
+  savePins();
+  render();
+}
+function removeDay(i){
+  if(planDays.length <= 1){
+    // Never leave the trip with zero days — clear the last one instead.
+    if(confirm('Clear every stop from this day?')){
+      setDayPlan(emptyPlan());
+      savePins(); render();
+    }
+    return;
+  }
+  const d = planDays[i];
+  if(d.stops.length && !confirm(`Remove this day and its ${d.stops.length} stop${d.stops.length===1?'':'s'}?`)) return;
+  planDays.splice(i, 1);
+  if(activeDay >= planDays.length) activeDay = planDays.length - 1;
+  dayPlan = planDays[activeDay];
+  savePins();
+  render();
+}
+function tripStopCount(){
+  return planDays.reduce((n, d) => n + d.stops.length, 0);
+}
 
 /* ---------- saved plans ----------
    A day plan you actually loved doesn't have to be reinvented next time —
@@ -2016,6 +2097,123 @@ let savedPlans = [];  // [{id, name, savedAt, stops: [...]}]
 function genId(prefix){
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 }
+/* Re-check a saved plan's stops against live map data before reusing it.
+   A plan saved months ago may reference places that closed, moved, or had
+   their hours changed. Rather than silently sending someone to a shuttered
+   restaurant, verify and report — but never block: a failed check yields a
+   warning, not a refusal, since the network may just be down. */
+async function revalidatePlan(stops){
+  if(!stops.length) return {checked:false, stops};
+  // One Overpass query around the plan's own centroid covers every stop.
+  const lat = stops.reduce((s,p) => s + p.lat, 0) / stops.length;
+  const lng = stops.reduce((s,p) => s + p.lng, 0) / stops.length;
+  // Radius big enough to cover the whole plan, plus margin.
+  const spread = Math.max(...stops.map(p => haversine(lat, lng, p.lat, p.lng)));
+  const radiusMi = Math.min(Math.max(spread * 1.5, 3), 50);
+
+  let live;
+  try{
+    live = await fetchLivePlaces(lat, lng, radiusMi);
+  }catch(err){
+    console.warn('Revalidation failed:', err);
+    return {checked:false, stops};
+  }
+
+  const byId = new Map(live.map(p => [p.id, p]));
+  const byName = new Map(live.map(p => [p.name.toLowerCase(), p]));
+  const missing = [];
+  const updated = stops.map(s => {
+    // Prefer an exact OSM id match; fall back to name, since OSM ids do
+    // change when a mapper redraws a node.
+    const hit = byId.get(s.id) || byName.get((s.name||'').toLowerCase());
+    if(!hit){ missing.push(s.name); return s; }
+    // Refresh hours and phone, keep the user's slot assignment.
+    return Object.assign({}, s, {hours: hit.hours, phone: hit.phone, lat: hit.lat, lng: hit.lng});
+  });
+  return {checked:true, stops:updated, missing};
+}
+
+/* ---------- calendar export ----------
+   Plain RFC 5545 .ics, generated client-side and handed to the OS as a blob.
+   No library: the format is simple enough that a dependency would cost more
+   than it saves, and this keeps the no-build-step constraint intact. */
+function icsEscape(str){
+  return String(str || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;')
+                          .replace(/,/g, '\\,').replace(/\n/g, '\\n');
+}
+function icsStamp(dateStr, mins){
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d, Math.floor(mins / 60), mins % 60);
+  const p = n => String(n).padStart(2, '0');
+  // Local time without a Z suffix — the event should read 7pm wherever the
+  // trip is, not shift with the reader's timezone.
+  return `${dt.getFullYear()}${p(dt.getMonth()+1)}${p(dt.getDate())}T${p(dt.getHours())}${p(dt.getMinutes())}00`;
+}
+// Same inference stopTime() uses, but against an explicit day rather than the
+// active one — so exporting doesn't depend on which day is on screen.
+function stopTimeIn(day, index){
+  const stop = day.stops[index];
+  if(stop.slot !== 'sight') return SLOT_BY_KEY[stop.slot].mins;
+  let before = null, after = null;
+  for(let i = index - 1; i >= 0; i--){
+    if(day.stops[i].slot !== 'sight'){ before = SLOT_BY_KEY[day.stops[i].slot].mins; break; }
+  }
+  for(let i = index + 1; i < day.stops.length; i++){
+    if(day.stops[i].slot !== 'sight'){ after = SLOT_BY_KEY[day.stops[i].slot].mins; break; }
+  }
+  if(before !== null && after !== null) return Math.round((before + after) / 2);
+  if(before !== null) return Math.min(before + 120, 1320);
+  if(after !== null) return Math.max(after - 120, 480);
+  return 720;
+}
+
+function buildICS(days){
+  const lines = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Vagatio//Day Plan//EN',
+    'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'
+  ];
+  const now = new Date();
+  const p = n => String(n).padStart(2, '0');
+  const stamp = `${now.getUTCFullYear()}${p(now.getUTCMonth()+1)}${p(now.getUTCDate())}T${p(now.getUTCHours())}${p(now.getUTCMinutes())}${p(now.getUTCSeconds())}Z`;
+
+  days.forEach((day) => {
+    day.stops.forEach((stop, i) => {
+      const mins = stopTimeIn(day, i);
+      const endMins = Math.min(mins + (stop.slot === 'sight' ? 60 : 90), 1439);
+      lines.push('BEGIN:VEVENT');
+      lines.push(`UID:${stop.id || 'stop'}-${day.date}-${i}@vagatio`);
+      lines.push(`DTSTAMP:${stamp}`);
+      lines.push(`DTSTART:${icsStamp(day.date, mins)}`);
+      lines.push(`DTEND:${icsStamp(day.date, endMins)}`);
+      const label = SLOT_BY_KEY[stop.slot] ? SLOT_BY_KEY[stop.slot].label : 'Sight';
+      lines.push(`SUMMARY:${icsEscape(stop.name)} (${label})`);
+      if(stop.lat != null && stop.lng != null){
+        lines.push(`GEO:${stop.lat};${stop.lng}`);
+        lines.push(`LOCATION:${icsEscape(stop.name)}`);
+        lines.push(`URL:${icsEscape(appleMapsURL(stop.name, stop.lat, stop.lng))}`);
+      }
+      if(stop.phone) lines.push(`DESCRIPTION:${icsEscape(stop.phone)}`);
+      lines.push('END:VEVENT');
+    });
+  });
+  lines.push('END:VCALENDAR');
+  // RFC 5545 requires CRLF line endings; some calendar apps genuinely reject
+  // files that use bare LF.
+  return lines.join('\r\n');
+}
+function exportICS(days, filename){
+  const ics = buildICS(days);
+  const blob = new Blob([ics], {type:'text/calendar;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function saveCurrentPlanAsFavorite(){
   if(planCount() === 0) return;
   const name = prompt('Name this plan, e.g. "Perfect Saturday downtown":', '');
@@ -2031,23 +2229,42 @@ function saveCurrentPlanAsFavorite(){
   savePins();
   render();
 }
-function loadSavedPlan(id){
+async function loadSavedPlan(id){
   const sp = savedPlans.find(x => x.id === id);
   if(!sp) return;
-  const apply = () => {
+  const apply = async () => {
     const today = new Date();
     const iso = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
     // Reusing a favorite means today, not the date it was originally saved.
-    dayPlan = {date: iso, stops: sp.stops.map(s => Object.assign({}, s))};
+    setDayPlan({date: iso, stops: sp.stops.map(s => Object.assign({}, s))});
     savePins();
     activeView = 'plan';
     syncControls();
     render();
+
+    // Check it against reality in the background — the plan is already
+    // usable, so this refines rather than blocks.
+    const status = document.getElementById('statusLine');
+    if(status) status.textContent = 'Checking these places are still there…';
+    const result = await revalidatePlan(sp.stops);
+    if(!result.checked){
+      if(status) status.textContent = "Couldn't verify these places — showing the plan as saved.";
+      return;
+    }
+    setDayPlan({date: iso, stops: result.stops});
+    savePins();
+    planWeatherSig = null;   // hours may have changed; force a fresh check
+    render();
+    if(status){
+      status.textContent = result.missing.length
+        ? `Heads up — no longer on the map: ${result.missing.join(', ')}. Everything else refreshed.`
+        : 'All stops verified, hours refreshed.';
+    }
   };
   if(planCount() > 0){
-    if(confirm(`Replace your current day plan with "${sp.name}"? This can't be undone.`)) apply();
+    if(confirm(`Replace your current day plan with "${sp.name}"? This can't be undone.`)) await apply();
   } else {
-    apply();
+    await apply();
   }
 }
 function deleteSavedPlan(id){
@@ -2212,7 +2429,7 @@ function removeStop(index){
   render();
 }
 function clearPlan(){
-  dayPlan = emptyPlan();
+  setDayPlan(emptyPlan());
   savePins();
   render();
 }
@@ -2935,7 +3152,7 @@ async function unwrapDEK(key, payload){
 // The vault holds both pins and the day plan. Older installs stored a bare
 // pins object, so unpack handles either shape.
 function vaultPayload(){
-  return {__v: 5, pins: pinnedStore, plan: dayPlan, marks: myMarks, journal: journalStore, savedPlans: savedPlans};
+  return {__v: 6, pins: pinnedStore, planDays: planDays, marks: myMarks, journal: journalStore, savedPlans: savedPlans};
 }
 function unpackVault(obj){
   if(obj && obj.__v >= 2){
@@ -2943,24 +3160,40 @@ function unpackVault(obj){
     myMarks = obj.marks || {};
     journalStore = obj.journal || {};
     savedPlans = Array.isArray(obj.savedPlans) ? obj.savedPlans : [];
-    dayPlan = Object.assign(emptyPlan(), obj.plan || {});
-    // Migrate the earlier plan shape (separate meal keys + sights array)
-    // into the ordered stops list.
-    if(!Array.isArray(dayPlan.stops)){
-      const stops = [];
-      if(dayPlan.breakfast) stops.push(Object.assign({}, dayPlan.breakfast, {slot:'breakfast'}));
-      (dayPlan.sights || []).forEach(p => stops.push(Object.assign({}, p, {slot:'sight'})));
-      if(dayPlan.lunch)  stops.push(Object.assign({}, dayPlan.lunch,  {slot:'lunch'}));
-      if(dayPlan.dinner) stops.push(Object.assign({}, dayPlan.dinner, {slot:'dinner'}));
-      dayPlan = {date: dayPlan.date || emptyPlan().date, stops};
+
+    if(Array.isArray(obj.planDays) && obj.planDays.length){
+      // v6+: already multi-day.
+      planDays = obj.planDays.map(d => ({
+        date: d.date || emptyPlan().date,
+        stops: Array.isArray(d.stops) ? d.stops : []
+      }));
+    } else {
+      // v2–v5: a single plan. Wrap it as day one of a one-day trip.
+      const raw = obj.plan || {};
+      let stops;
+      if(Array.isArray(raw.stops)){
+        stops = raw.stops;
+      } else {
+        // Oldest shape: meal-keyed fields plus a separate sights array.
+        // Detect it from the source object directly — merging with
+        // emptyPlan() first would supply an empty stops array and mask it.
+        stops = [];
+        if(raw.breakfast) stops.push(Object.assign({}, raw.breakfast, {slot:'breakfast'}));
+        (raw.sights || []).forEach(p => stops.push(Object.assign({}, p, {slot:'sight'})));
+        if(raw.lunch)  stops.push(Object.assign({}, raw.lunch,  {slot:'lunch'}));
+        if(raw.dinner) stops.push(Object.assign({}, raw.dinner, {slot:'dinner'}));
+      }
+      planDays = [{date: raw.date || emptyPlan().date, stops}];
     }
   } else {
     pinnedStore = obj || {};
     myMarks = {};
     journalStore = {};
     savedPlans = [];
-    dayPlan = emptyPlan();
+    planDays = [emptyPlan()];
   }
+  activeDay = 0;
+  dayPlan = planDays[0];
   pinnedIds = new Set(Object.keys(pinnedStore));
 }
 
@@ -3173,7 +3406,7 @@ function applyPendingImport(){
   pendingImport = null;
   history.replaceState(null, '', location.pathname + location.search);
   const replace = () => {
-    dayPlan = {date: incoming.date, stops: incoming.stops.map(s => Object.assign({}, s))};
+    setDayPlan({date: incoming.date, stops: incoming.stops.map(s => Object.assign({}, s))});
     savePins();
     setView('plan');
   };
@@ -3312,7 +3545,9 @@ async function setPin(){
   if(pin !== confirmVal){ lockError.textContent = "PINs don't match."; return; }
   pinnedStore = {};
   pinnedIds = new Set();
-  dayPlan = emptyPlan();
+  planDays = [emptyPlan()];
+  activeDay = 0;
+  dayPlan = planDays[0];
   myMarks = {};
   localStorage.removeItem(WRAP_BIO);
   localStorage.removeItem(WRAP_DEV);
@@ -3638,19 +3873,30 @@ function renderPlan(list, label){
 
   list.innerHTML = `
     <div class="plan-card">
+      <div class="day-tabs">
+        ${planDays.map((d, i) => {
+          const label = new Date(d.date + 'T12:00:00').toLocaleDateString(undefined, {month:'short', day:'numeric'});
+          return `<button class="day-tab ${i === activeDay ? 'on' : ''}" data-day="${i}">
+            <span class="day-tab-n">Day ${i+1}</span>
+            <span class="day-tab-d">${label}${d.stops.length ? ' · ' + d.stops.length : ''}</span>
+          </button>`;
+        }).join('')}
+        <button class="day-tab add" id="addDayBtn" title="Add a day">＋</button>
+      </div>
       <div class="plan-head">
         <div>
           <div class="plan-date">${dayName}</div>
-          <div class="plan-sub">${planCount()} stop${planCount()===1?'':'s'}${total > 0 ? ` · ${fmtDist(total)} total` : ''}</div>
+          <div class="plan-sub">${planCount()} stop${planCount()===1?'':'s'}${total > 0 ? ` · ${fmtDist(total)} total` : ''}${planDays.length > 1 ? ` · ${tripStopCount()} across trip` : ''}</div>
         </div>
         <input type="date" id="planDate" value="${dayPlan.date}" class="plan-datepick">
       </div>
       ${planCount() ? '<button class="plan-share" id="planShare">↗ Share with your group</button>' : ''}
       ${planCount() ? '<button class="plan-save-fav" id="planSaveFav">☆ Save this plan for later</button>' : ''}
+      ${planCount() ? `<button class="plan-save-fav" id="planExport">📅 Add to calendar${planDays.length > 1 ? ' (whole trip)' : ''}</button>` : ''}
       ${rows}
       ${missingNote}
       ${planCount() > 2 ? '<button class="plan-opt" id="planOpt">↯ Reorder to cut travel</button>' : ''}
-      ${planCount() ? '<button class="plan-clear" id="planClear">Clear this day</button>' : ''}
+      ${(planCount() || planDays.length > 1) ? `<button class="plan-clear" id="planClear">${planDays.length > 1 ? 'Remove this day' : 'Clear this day'}</button>` : ''}
     </div>
     ${planCount() ? '' : '<div class="empty">Browse places and tap ＋ on a card to build your day.</div>'}
   `;
@@ -3663,10 +3909,22 @@ function renderPlan(list, label){
   if(ps) ps.addEventListener('click', sharePlan);
   const psf = document.getElementById('planSaveFav');
   if(psf) psf.addEventListener('click', saveCurrentPlanAsFavorite);
+  const pex = document.getElementById('planExport');
+  if(pex) pex.addEventListener('click', () => {
+    // Export the whole trip when there is one; a single day otherwise.
+    const days = planDays.length > 1 ? planDays.filter(d => d.stops.length) : [dayPlan];
+    exportICS(days, planDays.length > 1 ? 'vagatio-trip.ics' : `vagatio-${dayPlan.date}.ics`);
+  });
   const pc = document.getElementById('planClear');
   if(pc) pc.addEventListener('click', () => {
+    // With a multi-day trip, "clear" means remove this day entirely.
+    if(planDays.length > 1){ removeDay(activeDay); return; }
     if(confirm('Clear every stop from this day?')) clearPlan();
   });
+  list.querySelectorAll('.day-tab[data-day]').forEach(b =>
+    b.addEventListener('click', () => switchDay(+b.dataset.day)));
+  const addBtn = document.getElementById('addDayBtn');
+  if(addBtn) addBtn.addEventListener('click', addDay);
   list.querySelectorAll('.plan-mv').forEach(b =>
     b.addEventListener('click', () => moveStop(+b.dataset.i, +b.dataset.dir)));
   list.querySelectorAll('.plan-x').forEach(b =>
