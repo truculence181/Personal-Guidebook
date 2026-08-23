@@ -476,6 +476,59 @@
     --shadow-lg:0 0 56px rgba(165,107,255,0.42);
   }
   html{background:var(--bg);}
+
+  /* Visually hidden but available to screen readers. */
+  .sr-only{
+    position:absolute !important;
+    width:1px; height:1px;
+    padding:0; margin:-1px;
+    overflow:hidden;
+    clip:rect(0,0,0,0);
+    white-space:nowrap;
+    border:0;
+  }
+  /* Skip link: hidden until focused, then visible at the top. */
+  .skip-link{
+    position:absolute; left:12px; top:-60px;
+    z-index:200;
+    background:var(--ink); color:var(--bg);
+    padding:10px 16px; border-radius:0 0 10px 10px;
+    font-family:var(--font-body); font-size:14px; font-weight:600;
+    text-decoration:none;
+    transition:top .15s ease;
+  }
+  .skip-link:focus{top:0;}
+
+  /* ---------- REDUCED MOTION (WCAG 2.3.3) ----------
+     Honour the OS setting rather than animating regardless. Transitions
+     collapse to near-instant instead of being removed outright, so state
+     changes still register without motion. */
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{
+      animation-duration:0.01ms !important;
+      animation-iteration-count:1 !important;
+      transition-duration:0.01ms !important;
+      scroll-behavior:auto !important;
+    }
+    .eyebrow .dot{animation:none !important; opacity:1 !important;}
+    #ptr.spinning #ptrSpin{animation:none !important;}
+  }
+
+  /* ---------- FOCUS VISIBILITY (WCAG 2.4.7) ----------
+     :focus-visible rather than :focus so a mouse/touch tap doesn't leave a
+     ring behind, while keyboard navigation always shows one. The ring is
+     drawn with outline + offset so it stays visible regardless of the
+     element's own background or border. */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible{
+    outline:3px solid var(--accent);
+    outline-offset:2px;
+    border-radius:4px;
+  }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
     background:var(--bg);
@@ -788,7 +841,7 @@
     box-shadow:var(--shadow-xs);
   }
   .search-row input::placeholder{color:var(--ink-faint);}
-  .search-row input:focus{outline:none; border-color:var(--accent);}
+  .search-row input:focus-visible{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);}
   .search-row button{
     background:var(--surface);
     border:1px solid var(--line);
@@ -880,7 +933,7 @@
     cursor:pointer;
     box-shadow:var(--shadow-xs);
   }
-  #catSelect:focus, #skinSelect:focus, #radiusSelect:focus{outline:none; border-color:var(--accent);}
+  #catSelect:focus-visible, #skinSelect:focus-visible, #radiusSelect:focus-visible{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);}
   #catSelect:disabled, #skinSelect:disabled, #radiusSelect:disabled{cursor:default;}
   #catSelect option, #skinSelect option, #radiusSelect option{background:var(--surface); color:var(--ink);}
 
@@ -904,7 +957,8 @@
     font-size:14px;
     color:var(--ink);
   }
-  .list-search input:focus{outline:none;}
+  .list-search input:focus-visible{outline:none;}
+  .list-search:focus-within{border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);}
   .list-search input::placeholder{color:var(--ink-faint);}
   #listSearchClear{
     background:none; border:none; cursor:pointer;
@@ -993,7 +1047,7 @@
     background-size:4px 4px, 4px 4px;
     background-repeat:no-repeat;
   }
-  #pageSize:focus{outline:none; border-color:var(--accent);}
+  #pageSize:focus-visible{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);}
 
   .pager{
     display:flex; align-items:center; justify-content:space-between; gap:12px;
@@ -1296,7 +1350,7 @@
     resize:vertical;
     margin-bottom:6px;
   }
-  .journal-input:focus, .journal-date-input:focus{outline:none; border-color:var(--accent);}
+  .journal-input:focus-visible, .journal-date-input:focus-visible{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);}
   .journal-save{
     background:var(--ink);
     color:var(--bg);
@@ -1667,7 +1721,7 @@
     margin-bottom:12px;
     box-shadow:var(--shadow-xs);
   }
-  .pin-input:focus{outline:none; border-color:var(--accent);}
+  .pin-input:focus-visible{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);}
   .lock-btn{
     width:100%;
     background:var(--ink);
@@ -1752,7 +1806,7 @@
 
 <div id="ptr"><div id="ptrSpin">↻</div></div>
 <div class="tip-bubble" id="tipBubble"></div>
-<div id="updateBar" style="display:none;">
+<div id="updateBar" role="status" aria-live="polite" style="display:none;">
   <span>A new version is ready.</span>
   <div class="update-actions">
     <button id="updateBtn">Update</button>
@@ -1780,16 +1834,19 @@
     <div class="lock-compass"></div>
     <div class="lock-title" id="lockTitle">Set a PIN</div>
     <div class="lock-sub" id="lockSub">Choose a 4+ digit PIN. It encrypts your pinned places on this device — nobody else who picks up your phone can read them without it.</div>
+    <label for="pinInput" class="sr-only">PIN</label>
     <input type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="pin-input" id="pinInput" placeholder="••••" maxlength="12">
+    <label for="pinConfirm" class="sr-only">Confirm PIN</label>
     <input type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="pin-input" id="pinConfirm" placeholder="confirm ••••" maxlength="12" style="display:none;">
-    <div class="lock-error" id="lockError"></div>
+    <div class="lock-error" id="lockError" role="alert" aria-live="assertive"></div>
     <button class="lock-btn" id="lockSubmit">Set PIN & continue</button>
     <button class="bio-btn" id="bioBtn" style="display:none;">Unlock with Face ID</button>
     <button class="lock-reset" id="lockReset" style="display:none;">Forgot PIN? Reset app data</button>
   </div>
 </div>
 
-<div class="wrap" id="appContent" style="display:none;">
+<a href="#cardList" class="skip-link">Skip to results</a>
+<main class="wrap" id="appContent" style="display:none;">
 
   <div class="bio-offer" id="bioOffer" style="display:none;">
     <div class="bio-copy">
@@ -1806,7 +1863,7 @@
     <div class="hero-head">
       <div class="eyebrow"><span class="dot"></span>LIVE FIELD GUIDE</div>
       <div class="head-btns">
-        <button class="theme-btn" id="menuBtn" title="Settings" aria-label="Settings">⋯</button>
+        <button class="theme-btn" id="menuBtn" title="Settings" aria-label="Settings" aria-expanded="false" aria-haspopup="true">⋯</button>
         <div class="settings-menu" id="settingsMenu">
           <div class="menu-row">
             <span>Theme</span>
@@ -1863,12 +1920,13 @@
     </div>
 
     <div class="search-row">
+      <label for="locationInput" class="sr-only">Search a city or address</label>
       <input type="text" id="locationInput" placeholder="Or search a city / address to plan ahead…">
       <button id="searchBtn">Search</button>
       <button class="info-tip" data-tip="source" aria-label="About search sources">ⓘ</button>
     </div>
 
-    <div class="status-line" id="statusLine"></div>
+    <div class="status-line" id="statusLine" role="status" aria-live="polite" aria-atomic="true"></div>
 
     <div class="filter-bar">
       <button class="chip pin-chip" id="viewPinned">★ Pinned</button>
@@ -1900,7 +1958,7 @@
   </div>
 
   <div class="section-row">
-    <div class="section-label" id="sectionLabel">Nearby</div>
+    <div class="section-label" id="sectionLabel" aria-live="polite">Nearby</div>
     <div class="page-size">
       <label for="pageSize">Show</label>
       <select id="pageSize">
@@ -1912,6 +1970,7 @@
     </div>
   </div>
   <div class="list-search" id="listSearch" style="display:none;">
+    <label for="listSearchInput" class="sr-only">Search this list</label>
     <input type="text" id="listSearchInput" placeholder="Search…">
     <button id="listSearchClear" aria-label="Clear search">×</button>
   </div>
@@ -1919,7 +1978,7 @@
   <div id="pager"></div>
 
   <footer>vagatio · live data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></footer>
-</div>
+</main>
 
 <script>
 const SEED_PLACES = [
@@ -2406,7 +2465,7 @@ function journalHTML(id){
     return `<div class="journal-entry">
       <div class="journal-entry-head">
         <span class="journal-date">${d}</span>
-        <button class="journal-x" data-place="${id}" data-entry="${e.id}" title="Delete entry">×</button>
+        <button class="journal-x" data-place="${id}" data-entry="${e.id}" title="Delete entry" aria-label="Delete journal entry from ${d}">×</button>
       </div>
       <div class="journal-text">${escapeHtml(e.text)}</div>
     </div>`;
@@ -2417,8 +2476,8 @@ function journalHTML(id){
     <div class="drawer-label">Visit journal</div>
     ${list || '<div class="journal-empty">No entries yet.</div>'}
     <div class="journal-add">
-      <input type="date" class="journal-date-input" id="jdate-${id}" value="${iso}">
-      <textarea class="journal-input" id="jtext-${id}" placeholder="How was it? What did you have, who were you with…" rows="2"></textarea>
+      <label for="jdate-${id}" class="sr-only">Date of this visit</label><input type="date" class="journal-date-input" id="jdate-${id}" value="${iso}">
+      <label for="jtext-${id}" class="sr-only">Journal entry</label><textarea class="journal-input" id="jtext-${id}" placeholder="How was it? What did you have, who were you with…" rows="2"></textarea>
       <button class="journal-save" data-id="${id}">Add entry</button>
     </div>
   </div>`;
@@ -3472,13 +3531,15 @@ const menuBtn = document.getElementById('menuBtn');
 const settingsMenu = document.getElementById('settingsMenu');
 menuBtn.addEventListener('click', (e) => {
   e.stopPropagation();
-  settingsMenu.classList.toggle('open');
+  const open = settingsMenu.classList.toggle('open');
+  menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
 });
 document.addEventListener('click', (e) => {
   if(settingsMenu.classList.contains('open')
      && !e.target.closest('.settings-menu')
      && !e.target.closest('#menuBtn')){
     settingsMenu.classList.remove('open');
+    menuBtn.setAttribute('aria-expanded', 'false');
   }
 });
 const bioDismiss = document.getElementById('bioDismiss');
@@ -3936,7 +3997,7 @@ function renderPlan(list, label){
     const leg = legs[i] != null
       ? `<div class="plan-leg">
           <span class="leg-line"></span>${fmtDist(legs[i])}
-          <button class="leg-ride" data-leg="${i}">Ride</button>
+          <button class="leg-ride" data-leg="${i}" aria-expanded="false" aria-label="Ride options to ${stop.name}">Ride</button>
         </div>
         ${ridePickerHTML('leg-'+i, stop.lat, stop.lng, stop.name, {lat:dayPlan.stops[i-1].lat, lng:dayPlan.stops[i-1].lng})}`
       : '';
@@ -3954,9 +4015,9 @@ function renderPlan(list, label){
           ${warn}
         </div>
         <div class="plan-ctrl">
-          <button class="plan-mv" data-i="${i}" data-dir="-1" ${i===0?'disabled':''} title="Move earlier">↑</button>
-          <button class="plan-mv" data-i="${i}" data-dir="1" ${i===dayPlan.stops.length-1?'disabled':''} title="Move later">↓</button>
-          <button class="plan-x" data-i="${i}" title="Remove">×</button>
+          <button class="plan-mv" data-i="${i}" data-dir="-1" ${i===0?'disabled':''} title="Move earlier" aria-label="Move ${stop.name} earlier">↑</button>
+          <button class="plan-mv" data-i="${i}" data-dir="1" ${i===dayPlan.stops.length-1?'disabled':''} title="Move later" aria-label="Move ${stop.name} later">↓</button>
+          <button class="plan-x" data-i="${i}" title="Remove" aria-label="Remove ${stop.name} from plan">×</button>
         </div>
       </div>`;
   }).join('');
@@ -3970,18 +4031,19 @@ function renderPlan(list, label){
       <div class="day-tabs">
         ${planDays.map((d, i) => {
           const label = new Date(d.date + 'T12:00:00').toLocaleDateString(undefined, {month:'short', day:'numeric'});
-          return `<button class="day-tab ${i === activeDay ? 'on' : ''}" data-day="${i}">
+          return `<button class="day-tab ${i === activeDay ? 'on' : ''}" data-day="${i}" ${i === activeDay ? 'aria-current="true"' : ''} aria-label="Day ${i+1}, ${label}, ${d.stops.length} stop${d.stops.length===1?'':'s'}">
             <span class="day-tab-n">Day ${i+1}</span>
             <span class="day-tab-d">${label}${d.stops.length ? ' · ' + d.stops.length : ''}</span>
           </button>`;
         }).join('')}
-        <button class="day-tab add" id="addDayBtn" title="Add a day">＋</button>
+        <button class="day-tab add" id="addDayBtn" title="Add a day" aria-label="Add another day to this trip">＋</button>
       </div>
       <div class="plan-head">
         <div>
           <div class="plan-date">${dayName}</div>
           <div class="plan-sub">${planCount()} stop${planCount()===1?'':'s'}${total > 0 ? ` · ${fmtDist(total)} total` : ''}${planDays.length > 1 ? ` · ${tripStopCount()} across trip` : ''}</div>
         </div>
+        <label for="planDate" class="sr-only">Date for this day of the trip</label>
         <input type="date" id="planDate" value="${dayPlan.date}" class="plan-datepick">
       </div>
       ${planCount() ? '<button class="plan-share" id="planShare">↗ Share with your group</button>' : ''}
@@ -4026,7 +4088,8 @@ function renderPlan(list, label){
   list.querySelectorAll('.leg-ride').forEach(b =>
     b.addEventListener('click', () => {
       const picker = document.getElementById(`ride-leg-${b.dataset.leg}`);
-      if(picker) picker.classList.toggle('open');
+      if(picker) b.setAttribute('aria-expanded',
+        picker.classList.toggle('open') ? 'true' : 'false');
     }));
   list.querySelectorAll('.ride-opt').forEach(a =>
     a.addEventListener('click', () => markHandoff()));
@@ -4131,8 +4194,8 @@ function render(){
       <div class="card" data-map="${mapUrl}" data-id="${p.id}">
         <div style="position:relative;">
           ${coverFor(p)}
-          <button class="card-pin ${isPinned?'pinned':''}" data-id="${p.id}" title="Pin this place">${isPinned ? '★' : '☆'}</button>
-          <button class="card-add ${inPlan(p.id)?'on':''}" data-id="${p.id}" title="Add to day plan">＋</button>
+          <button class="card-pin ${isPinned?'pinned':''}" data-id="${p.id}" title="Pin this place" aria-pressed="${isPinned}" aria-label="${isPinned ? 'Unpin' : 'Pin'} ${p.name}">${isPinned ? '★' : '☆'}</button>
+          <button class="card-add ${inPlan(p.id)?'on':''}" data-id="${p.id}" title="Add to day plan" aria-expanded="false" aria-label="Plan options for ${p.name}">＋</button>
           ${ratingHtml}
         </div>
         <div class="card-body">
@@ -4150,7 +4213,7 @@ function render(){
         <div class="card-actions">
           <a href="${mapUrl}" rel="noopener">Directions</a>
           ${callHtml}
-          <button class="card-actions-ride" data-id="${p.id}">Ride</button>
+          <button class="card-actions-ride" data-id="${p.id}" aria-expanded="false" aria-label="Ride options to ${p.name}">Ride</button>
         </div>
         ${ridePickerHTML(p.id, p.lat, p.lng, p.name, userLoc)}
       </div>
@@ -4175,7 +4238,8 @@ function render(){
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const picker = document.getElementById(`ride-${btn.dataset.id}`);
-      if(picker) picker.classList.toggle("open");
+      if(picker) btn.setAttribute("aria-expanded",
+        picker.classList.toggle("open") ? "true" : "false");
     });
   });
 
@@ -4189,8 +4253,9 @@ function render(){
       e.stopPropagation();
       const picker = btn.closest(".card").querySelector(".slot-picker");
       if(picker){
-        picker.classList.toggle("open");
-        openDrawerId = picker.classList.contains("open") ? btn.dataset.id : null;
+        const open = picker.classList.toggle("open");
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        openDrawerId = open ? btn.dataset.id : null;
       }
     });
   });
@@ -4822,11 +4887,15 @@ const viewRecent = document.getElementById("viewRecent");
 const openNowBtn = document.getElementById("openNow");
 
 function syncControls(){
-  viewPinned.classList.toggle("active", activeView === "pinned");
-  viewPlan.classList.toggle("active", activeView === "plan");
-  viewSaved.classList.toggle("active", activeView === "saved");
-  viewRecent.classList.toggle("active", activeView === "recent");
-  openNowBtn.classList.toggle("active", openOnly);
+  const setToggle = (el, on) => {
+    el.classList.toggle("active", on);
+    el.setAttribute("aria-pressed", on ? "true" : "false");
+  };
+  setToggle(viewPinned, activeView === "pinned");
+  setToggle(viewPlan,   activeView === "plan");
+  setToggle(viewSaved,  activeView === "saved");
+  setToggle(viewRecent, activeView === "recent");
+  setToggle(openNowBtn, openOnly);
   catSelect.value = activeCat;
   // Category and distance don't apply to the saved lists, so dim them there.
   const browsing = activeView === "browse";
