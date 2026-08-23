@@ -1261,8 +1261,10 @@
   }
   .cover-fallback svg{width:30%; height:30%;}
   .icon-pixel{display:none;}
-  [data-skin="8bit"] .icon-classic{display:none;}
-  [data-skin="8bit"] .icon-pixel{display:block; image-rendering:pixelated;}
+  [data-skin="8bit"] .icon-classic,
+  [data-skin="futuristic"] .icon-classic{display:none;}
+  [data-skin="8bit"] .icon-pixel,
+  [data-skin="futuristic"] .icon-pixel{display:block; image-rendering:pixelated;}
 
   /* A thin pixel-grass strip along the bottom of every cover tile — cheap,
      always-on flavor that reads unmistakably "cozy pixel farm" without
@@ -4098,13 +4100,14 @@ async function ensurePlanWeather(){
   if(sig === planWeatherSig || planWeatherLoading) return;
   if(!dayPlan.stops.length){ planWeather = null; planWeatherSig = sig; return; }
 
+  // Coarse pre-check in browser-local time, just to avoid wasting a call on
+  // something obviously outside the forecast horizon — a day or so of
+  // slack either side costs nothing since the real per-stop matching below
+  // is timezone-exact regardless.
   const today = new Date(); today.setHours(0,0,0,0);
   const [y, m, d] = dayPlan.date.split('-').map(Number);
-  const dayOffset = Math.round((new Date(y, m-1, d) - today) / 86400000);
-
-  // Beyond the 16-day forecast horizon (a saved favorite reused months
-  // later, say) — mark unavailable rather than guessing or erroring.
-  if(dayOffset < 0 || dayOffset > 15){
+  const roughOffset = Math.round((new Date(y, m-1, d) - today) / 86400000);
+  if(roughOffset < -1 || roughOffset > 16){
     planWeather = dayPlan.stops.map(() => ({available:false}));
     planWeatherSig = sig;
     return;
@@ -4115,8 +4118,19 @@ async function ensurePlanWeather(){
     const results = await fetchWeather(dayPlan.stops.map(s => ({lat:s.lat, lng:s.lng})));
     planWeather = dayPlan.stops.map((s, i) => {
       const r = results[i];
-      if(!r || !r.hourly) return {available:false};
-      const idx = dayOffset * 24 + Math.floor(stopTime(i) / 60);
+      if(!r || !r.hourly || !r.hourly.time) return {available:false};
+
+      // Build the target moment using *that stop's own* UTC offset, not the
+      // browser's — this is the fix. A plan built while home but set in
+      // another timezone previously mismatched by however many hours
+      // separate the two; matching by absolute timestamp against each
+      // location's own offset makes every stop correct regardless of
+      // where the browser building the plan happens to be.
+      const offsetSec = typeof r.utc_offset_seconds === 'number' ? r.utc_offset_seconds : 0;
+      const localWallClockMs = Date.UTC(y, m-1, d) + stopTime(i) * 60000;
+      const targetUTCms = localWallClockMs - offsetSec * 1000;
+      const idx = closestHourlyIndex(r.hourly.time, targetUTCms, offsetSec);
+
       const temps = r.hourly.temperature_2m;
       const codeArr = Array.isArray(r.hourly.weather_code) ? r.hourly.weather_code : r.hourly.weathercode;
       const rainArr = r.hourly.precipitation_probability;
@@ -4141,10 +4155,25 @@ async function ensurePlanWeather(){
 // Finds the hourly entry closest to a target moment in absolute time —
 // safer than matching by hour-of-day, which breaks if the searched
 // location's timezone differs from the browser's.
-function closestHourlyIndex(times, targetMs){
+// Open-Meteo returns hourly timestamps as naive local strings, e.g.
+// "2026-09-01T09:00" — no "Z", no offset. `new Date(str)` on a string like
+// that is interpreted in *this browser's* timezone, not the queried
+// location's, so it silently gives the wrong instant whenever those differ.
+// Parsing the components by hand and converting with the location's own
+// utc_offset_seconds (which Open-Meteo includes in every response) is the
+// only way this is actually correct for a location far from the browser.
+function parseNaiveLocal(str){
+  const [datePart, timePart] = str.split('T');
+  const [y, m, d] = datePart.split('-').map(Number);
+  const [hh, mm] = timePart.split(':').map(Number);
+  return Date.UTC(y, m - 1, d, hh, mm);
+}
+function closestHourlyIndex(times, targetUTCms, utcOffsetSec){
+  const offsetMs = (utcOffsetSec || 0) * 1000;
   let idx = 0, best = Infinity;
   times.forEach((t, i) => {
-    const diff = Math.abs(new Date(t).getTime() - targetMs);
+    const entryUTCms = parseNaiveLocal(t) - offsetMs;
+    const diff = Math.abs(entryUTCms - targetUTCms);
     if(diff < best){ best = diff; idx = i; }
   });
   return idx;
@@ -4160,7 +4189,7 @@ async function refreshHeaderWeather(lat, lng){
     // `current` block, whose exact field shape wasn't reliably verifiable
     // from this sandbox and evidently doesn't match what the live API sends.
     if(!r || !r.hourly || !r.hourly.time){ el.style.display = 'none'; return; }
-    const idx = closestHourlyIndex(r.hourly.time, Date.now());
+    const idx = closestHourlyIndex(r.hourly.time, Date.now(), r.utc_offset_seconds);
     const codeArr = Array.isArray(r.hourly.weather_code) ? r.hourly.weather_code : r.hourly.weathercode;
     const temp = r.hourly.temperature_2m ? r.hourly.temperature_2m[idx] : null;
     const code = codeArr ? codeArr[idx] : null;
