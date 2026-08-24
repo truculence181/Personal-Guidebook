@@ -1009,9 +1009,18 @@
 
   .filter-bar{
     display:flex; align-items:center; gap:8px;
-    margin-top:20px;
+    margin-top:14px;
     flex-wrap:wrap;
   }
+  .view-tabs{
+    display:flex; gap:6px;
+    margin-top:20px;
+    overflow-x:auto;
+    -ms-overflow-style:none; scrollbar-width:none;
+  }
+  .view-tabs::-webkit-scrollbar{display:none;}
+  .view-tabs .chip{flex-shrink:0;}
+  .diet-select-wrap{flex:none; width:128px; min-width:0;}
   .select-wrap{
     position:relative;
     flex:1;
@@ -1091,13 +1100,7 @@
   }
   .clear-recent:active{color:var(--rust);}
 
-  .chip-divider{
-    width:1px;
-    align-self:stretch;
-    background:var(--line);
-    margin:2px 4px;
-    flex-shrink:0;
-  }
+
   .radius-row{
     display:flex; align-items:center; gap:10px;
     margin-top:10px;
@@ -2163,16 +2166,27 @@
 
     <div class="status-line" id="statusLine" role="status" aria-live="polite" aria-atomic="true"></div>
 
-    <div class="filter-bar">
+    <div class="view-tabs" id="viewTabs">
       <button class="chip pin-chip" id="viewPinned">★ Pinned</button>
       <button class="chip plan-chip" id="viewPlan">◷ Day plan</button>
       <button class="chip saved-chip" id="viewSaved">❖ Saved</button>
       <button class="chip recent-chip" id="viewRecent">◴ Recent</button>
       <button class="chip recap-chip" id="viewRecap">📖 Recap</button>
-      <span class="chip-divider"></span>
+    </div>
+
+    <div class="filter-bar">
       <div class="select-wrap">
         <select id="catSelect" aria-label="Category">
           <option value="all">All categories</option>
+        </select>
+      </div>
+      <div class="select-wrap diet-select-wrap" id="dietRow" style="display:none;">
+        <select id="dietSelect" aria-label="Dietary filter">
+          <option value="any">Any diet</option>
+          <option value="vegetarian">Vegetarian</option>
+          <option value="vegan">Vegan</option>
+          <option value="halal">Halal</option>
+          <option value="kosher">Kosher</option>
         </select>
       </div>
       <button class="chip" id="openNow">Open now</button>
@@ -2187,18 +2201,6 @@
           <option value="20">20 mi</option>
           <option value="30">30 mi</option>
           <option value="50">50 mi</option>
-        </select>
-      </div>
-    </div>
-    <div class="radius-row" id="dietRow" style="display:none;">
-      <span class="radius-label">Diet</span>
-      <div class="select-wrap radius-select-wrap">
-        <select id="dietSelect" aria-label="Dietary filter">
-          <option value="any">Any</option>
-          <option value="vegetarian">Vegetarian</option>
-          <option value="vegan">Vegan</option>
-          <option value="halal">Halal</option>
-          <option value="kosher">Kosher</option>
         </select>
       </div>
     </div>
@@ -2436,7 +2438,20 @@ function removeDay(i){
     return;
   }
   const d = planDays[i];
-  if(d.stops.length && !confirm(`Remove this day and its ${d.stops.length} stop${d.stops.length===1?'':'s'}?`)) return;
+  if(d.stops.length){
+    // Recap only surfaces a day if it's still present in planDays — removing
+    // it here means it disappears from Recap too, even though the journal
+    // entries themselves live in journalStore independently and aren't
+    // actually deleted. Worth saying both parts explicitly rather than
+    // letting someone assume either "nothing is lost" or "everything is."
+    const entryCount = d.stops.reduce((n, s) =>
+      n + journalFor(s.id).filter(e => e.date === d.date).length, 0);
+    const isPast = d.date < todayISO();
+    const msg = (isPast && entryCount > 0)
+      ? `This day already happened and has ${entryCount} journal ${entryCount === 1 ? 'entry' : 'entries'} tied to it. Removing it will take it out of Recap — the journal entries themselves aren't deleted and still show in "Export journal." Continue?`
+      : `Remove this day and its ${d.stops.length} stop${d.stops.length===1?'':'s'}?`;
+    if(!confirm(msg)) return;
+  }
   planDays.splice(i, 1);
   if(activeDay >= planDays.length) activeDay = planDays.length - 1;
   dayPlan = planDays[activeDay];
@@ -5535,7 +5550,7 @@ function syncControls(){
   // would silently hide results the next time a food category is picked.
   const dietRow = document.getElementById("dietRow");
   const showDiet = browsing && DIET_CATS.has(activeCat);
-  dietRow.style.display = showDiet ? "flex" : "none";
+  dietRow.style.display = showDiet ? "" : "none";
   if(!showDiet && dietFilter !== "any"){
     dietFilter = "any";
     document.getElementById("dietSelect").value = "any";
