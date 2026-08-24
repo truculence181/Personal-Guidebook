@@ -1019,6 +1019,27 @@
     -ms-overflow-style:none; scrollbar-width:none;
   }
   .view-tabs::-webkit-scrollbar{display:none;}
+  .sub-tabs{
+    display:flex; gap:6px;
+    margin-top:10px;
+  }
+  .sub-tab{
+    flex:1;
+    background:var(--bg);
+    border:1px solid var(--line);
+    border-radius:9px;
+    padding:7px 10px;
+    font-family:var(--font-label);
+    font-size:11px; font-weight:600;
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .sub-tab.active{
+    background:var(--ink);
+    border-color:var(--ink);
+    color:var(--bg);
+  }
+  .sub-tab:active{transform:scale(0.97);}
   .view-tabs .chip{flex-shrink:0;}
   .diet-select-wrap{flex:none; width:128px; min-width:0;}
   .select-wrap{
@@ -1054,8 +1075,6 @@
   #catSelect:disabled, #skinSelect:disabled, #radiusSelect:disabled, #dietSelect:disabled{cursor:default;}
   #catSelect option, #skinSelect option, #radiusSelect option, #dietSelect option{background:var(--surface); color:var(--ink);}
 
-  .chip.recent-chip{color:var(--accent-deep);}
-  .chip.recent-chip.active{background:var(--accent); border-color:var(--accent); color:#fff;}
 
   .list-search{
     display:flex; align-items:center; gap:6px;
@@ -2167,11 +2186,17 @@
     <div class="status-line" id="statusLine" role="status" aria-live="polite" aria-atomic="true"></div>
 
     <div class="view-tabs" id="viewTabs">
-      <button class="chip pin-chip" id="viewPinned">★ Pinned</button>
+      <button class="chip pin-chip" id="viewPlaces">★ Places</button>
       <button class="chip plan-chip" id="viewPlan">◷ Day plan</button>
-      <button class="chip saved-chip" id="viewSaved">❖ Saved</button>
-      <button class="chip recent-chip" id="viewRecent">◴ Recent</button>
-      <button class="chip recap-chip" id="viewRecap">📖 Recap</button>
+      <button class="chip saved-chip" id="viewTrips">❖ Trips</button>
+    </div>
+    <div class="sub-tabs" id="placesSubTabs" style="display:none;">
+      <button class="sub-tab" data-tab="pinned">★ Pinned</button>
+      <button class="sub-tab" data-tab="recent">◴ Recent</button>
+    </div>
+    <div class="sub-tabs" id="tripsSubTabs" style="display:none;">
+      <button class="sub-tab" data-tab="saved">❖ Saved</button>
+      <button class="sub-tab" data-tab="recap">📖 Recap</button>
     </div>
 
     <div class="filter-bar">
@@ -2366,6 +2391,8 @@ let activePlaces = SEED_PLACES;
 let activeView = "browse";   // browse | pinned | plan
 let activeCat = "all";       // all | category key
 let dietFilter = "any";      // any | vegetarian | vegan | halal | kosher
+let placesTab = "pinned";    // pinned | recent — sub-selection within the Places view
+let tripsTab = "saved";      // saved | recap — sub-selection within the Trips view
 const DIET_CATS = new Set(['food', 'coffee', 'bars']);
 let openOnly = false;
 let pageSize = 10;          // 10 | 20 | 50 | 100
@@ -3788,8 +3815,10 @@ function togglePin(place){
 }
 function updatePinBadge(){
   const n = Object.keys(pinnedStore).length;
-  const btn = document.getElementById('viewPinned');
-  if(btn) btn.textContent = n ? `★ Pinned · ${n}` : '★ Pinned';
+  const topBtn = document.getElementById('viewPlaces');
+  if(topBtn) topBtn.textContent = n ? `★ Places · ${n}` : '★ Places';
+  const subBtn = document.querySelector('#placesSubTabs .sub-tab[data-tab="pinned"]');
+  if(subBtn) subBtn.textContent = n ? `★ Pinned · ${n}` : '★ Pinned';
 }
 
 /* ---------- Face ID / Touch ID via WebAuthn PRF ---------- */
@@ -4671,10 +4700,10 @@ function renderPlan(list, label){
 }
 
 function sectionLabelText(count){
-  if(activeView === "pinned"){
+  if(activeView === "places" && placesTab === "pinned"){
     return listQuery.pinned ? `Pinned · ${count} match${count===1?'':'es'}` : "Pinned places";
   }
-  if(activeView === "recent"){
+  if(activeView === "places" && placesTab === "recent"){
     return listQuery.recent ? `Recent · ${count} match${count===1?'':'es'}` : "Recently viewed";
   }
   const cat = activeCat === "all" ? "Nearby" : CAT_LABEL[activeCat];
@@ -4725,22 +4754,18 @@ function render(){
     return;
   }
 
-  if(activeView === "saved"){
-    renderSaved(list, label);
+  if(activeView === "trips"){
+    if(tripsTab === "recap") renderRecap(list, label);
+    else renderSaved(list, label);
     return;
   }
 
-  if(activeView === "recap"){
-    renderRecap(list, label);
-    return;
-  }
-
-  if(activeView === "pinned"){
+  if(activeView === "places" && placesTab === "pinned"){
     items = Object.values(pinnedStore);
     // Your own ratings are the most useful ordering for places you've saved.
     items.sort((a,b) => markFor(b.id).stars - markFor(a.id).stars);
     if(listQuery.pinned) items = items.filter(p => matchesQuery(p, listQuery.pinned));
-  } else if(activeView === "recent"){
+  } else if(activeView === "places" && placesTab === "recent"){
     // Already stored most-recent-first; no re-sorting.
     items = recentStore.slice();
     if(listQuery.recent) items = items.filter(p => matchesQuery(p, listQuery.recent));
@@ -4754,11 +4779,11 @@ function render(){
   if(userLoc){
     items.forEach(p => p._dist = haversine(userLoc.lat, userLoc.lng, p.lat, p.lng));
     // Respect the distance filter, but never hide something you saved.
-    if(activeView !== "pinned" && activeView !== "recent"){
+    if(activeView !== "places"){
       items = items.filter(p => p._dist <= searchRadiusMi + 0.5);
     }
     items.sort((a,b) => a._dist - b._dist);
-  } else if(activeView !== "pinned" && activeView !== "recent"){
+  } else if(activeView !== "places"){
     items.sort((a,b) => (b.rating||0) - (a.rating||0));
   }
   label.textContent = sectionLabelText(items.length);
@@ -4772,12 +4797,12 @@ function render(){
   const pageItems = items.slice(page * pageSize, (page + 1) * pageSize);
 
   if(items.length === 0){
-    const q = listQuery[activeView];
+    const q = activeView === "places" ? listQuery[placesTab] : "";
     const msg = q
       ? `No matches for “${escapeHtml(q)}”.`
-      : activeView === "pinned"
+      : (activeView === "places" && placesTab === "pinned")
       ? "Nothing pinned yet — tap the ☆ on any place to save it here."
-      : activeView === "recent"
+      : (activeView === "places" && placesTab === "recent")
       ? "Nothing here yet — places you open will show up so you can find them again."
       : openOnly
         ? "Nothing open right now in this category — try turning off Open now."
@@ -4943,7 +4968,7 @@ function render(){
 
   // Offer a way to wipe the history — it's a record of where you've been
   // looking, which some people will reasonably want to clear.
-  if(activeView === 'recent' && recentStore.length){
+  if(activeView === 'places' && placesTab === 'recent' && recentStore.length){
     const pager = document.getElementById('pager');
     pager.insertAdjacentHTML('beforeend',
       '<button class="clear-recent" id="clearRecentBtn">Clear history</button>');
@@ -4952,7 +4977,7 @@ function render(){
 
   // Only worth offering once there's actually something written — an empty
   // export button just invites a confusing empty download.
-  if(activeView === 'pinned' && Object.values(journalStore).some(entries => entries.length)){
+  if(activeView === 'places' && placesTab === 'pinned' && Object.values(journalStore).some(entries => entries.length)){
     const pager = document.getElementById('pager');
     pager.insertAdjacentHTML('beforeend',
       '<button class="clear-recent" id="exportJournalBtn">Export journal</button>');
@@ -5520,11 +5545,9 @@ CATEGORIES.forEach(cat => {
   catSelect.appendChild(opt);
 });
 
-const viewPinned = document.getElementById("viewPinned");
+const viewPlaces = document.getElementById("viewPlaces");
 const viewPlan = document.getElementById("viewPlan");
-const viewSaved = document.getElementById("viewSaved");
-const viewRecent = document.getElementById("viewRecent");
-const viewRecap = document.getElementById("viewRecap");
+const viewTrips = document.getElementById("viewTrips");
 const openNowBtn = document.getElementById("openNow");
 
 function syncControls(){
@@ -5532,17 +5555,15 @@ function syncControls(){
     el.classList.toggle("active", on);
     el.setAttribute("aria-pressed", on ? "true" : "false");
   };
-  setToggle(viewPinned, activeView === "pinned");
+  setToggle(viewPlaces, activeView === "places");
   setToggle(viewPlan,   activeView === "plan");
-  setToggle(viewSaved,  activeView === "saved");
-  setToggle(viewRecent, activeView === "recent");
-  setToggle(viewRecap,  activeView === "recap");
+  setToggle(viewTrips,  activeView === "trips");
   setToggle(openNowBtn, openOnly);
   catSelect.value = activeCat;
   // Category and distance don't apply to the saved lists, so dim them there.
   const browsing = activeView === "browse";
   catSelect.disabled = !browsing;
-  openNowBtn.disabled = activeView === "plan" || activeView === "saved" || activeView === "recap";
+  openNowBtn.disabled = activeView === "plan" || activeView === "trips";
   document.getElementById("radiusChips").style.opacity = browsing ? "" : ".4";
   document.querySelector(".select-wrap").style.opacity = browsing ? "" : ".4";
   // Diet only makes sense for food-ish categories — hide it otherwise, and
@@ -5555,6 +5576,14 @@ function syncControls(){
     dietFilter = "any";
     document.getElementById("dietSelect").value = "any";
   }
+  // Sub-tab bars: only one visible at a time, matching whichever merged
+  // view is active, with the current sub-selection highlighted.
+  document.getElementById("placesSubTabs").style.display = activeView === "places" ? "flex" : "none";
+  document.getElementById("tripsSubTabs").style.display = activeView === "trips" ? "flex" : "none";
+  document.querySelectorAll("#placesSubTabs .sub-tab").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === placesTab));
+  document.querySelectorAll("#tripsSubTabs .sub-tab").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === tripsTab));
   syncListSearch();
 }
 
@@ -5566,24 +5595,24 @@ const listSearch = document.getElementById('listSearch');
 const listSearchInput = document.getElementById('listSearchInput');
 
 function syncListSearch(){
-  const searchable = activeView === 'pinned' || activeView === 'recent';
+  const searchable = activeView === 'places';
   listSearch.style.display = searchable ? 'flex' : 'none';
   if(!searchable) return;
-  listSearchInput.placeholder = activeView === 'pinned'
+  listSearchInput.placeholder = placesTab === 'pinned'
     ? 'Search pinned places and journal…'
     : 'Search recently viewed…';
-  const current = listQuery[activeView] || '';
+  const current = listQuery[placesTab] || '';
   if(listSearchInput.value !== current) listSearchInput.value = current;
 }
 listSearchInput.addEventListener('input', () => {
-  if(activeView !== 'pinned' && activeView !== 'recent') return;
-  listQuery[activeView] = listSearchInput.value.trim();
+  if(activeView !== 'places') return;
+  listQuery[placesTab] = listSearchInput.value.trim();
   resetPage();
   render();
 });
 document.getElementById('listSearchClear').addEventListener('click', () => {
-  if(activeView !== 'pinned' && activeView !== 'recent') return;
-  listQuery[activeView] = '';
+  if(activeView !== 'places') return;
+  listQuery[placesTab] = '';
   listSearchInput.value = '';
   resetPage();
   render();
@@ -5596,11 +5625,28 @@ function setView(v){
   syncControls();
   render();
 }
-viewPinned.addEventListener("click", () => setView("pinned"));
+viewPlaces.addEventListener("click", () => setView("places"));
 viewPlan.addEventListener("click", () => setView("plan"));
-viewSaved.addEventListener("click", () => setView("saved"));
-viewRecent.addEventListener("click", () => setView("recent"));
-viewRecap.addEventListener("click", () => setView("recap"));
+viewTrips.addEventListener("click", () => setView("trips"));
+
+// Sub-tabs don't change the top-level view — tapping one while already on
+// Places/Trips just swaps which half of that view is showing.
+document.getElementById("placesSubTabs").addEventListener("click", (e) => {
+  const btn = e.target.closest(".sub-tab");
+  if(!btn) return;
+  placesTab = btn.dataset.tab;
+  resetPage();
+  syncControls();
+  render();
+});
+document.getElementById("tripsSubTabs").addEventListener("click", (e) => {
+  const btn = e.target.closest(".sub-tab");
+  if(!btn) return;
+  tripsTab = btn.dataset.tab;
+  resetPage();
+  syncControls();
+  render();
+});
 openNowBtn.addEventListener("click", () => {
   if(activeView === "plan") return;
   openOnly = !openOnly;
