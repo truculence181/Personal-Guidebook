@@ -1,6 +1,6 @@
 # Vagatio — Technical Design Document
 
-**Version:** 1.2 (beta)
+**Version:** 1.3 (beta)
 **Status:** Deployed, in personal use with a small trusted tester group
 **Last updated:** August 2026
 **Repository:** `Personal-Guidebook` (GitHub Pages)
@@ -582,7 +582,9 @@ would mean ~30+ more hand-drawn SVGs and every card carrying nine variants.
 
 Several independent axes, deliberately not collapsed into one:
 
-- `activeView`: `browse | pinned | plan | saved | recent | recap`
+- `activeView`: `browse | places | plan | trips`, with two more sub-selection
+  variables scoped inside two of those — `placesTab: pinned | recent` and
+  `tripsTab: saved | recap`
 - `activeCat`: `all` or a category key
 - `dietFilter`: `any | vegetarian | vegan | halal | kosher` — only shown/
   meaningful for `food | coffee | bars`, reset to `any` automatically when
@@ -593,15 +595,29 @@ The earlier single-`activeCat` model made every filter mutually exclusive —
 "Coffee that's open now" was unrepresentable. `sectionLabelText()` renders the
 active combination so the current filter is always visible.
 
-Pinned and Recent bypass the radius filter: saving or having viewed
-somewhere 200 miles away shouldn't make it vanish.
+Pinned and Recent (jointly, "Places") bypass the radius filter: saving or
+having viewed somewhere 200 miles away shouldn't make it vanish.
 
-**The view-selector chips and the browse-narrowing controls are visually
-separated into two rows** (`view-tabs` and `filter-bar`), not stacked
-together as originally built. Six view chips plus a category dropdown plus
-Open Now in one row was overcrowded on a phone screen; splitting "which list
-am I looking at" from "how do I narrow it" — genuinely different mental
-operations — fixed it without reducing what either row can do.
+**Six top-level view chips collapsed to three, in two passes.** First,
+splitting the view-selector chips onto their own scrollable row, separate
+from the category/diet/open-now filters — genuinely different mental
+operations, but even that row alone (five chips) still overflowed most phone
+screens. The actual fix was consolidating **Pinned + Recent into "Places"**
+and **Saved + Recap into "Trips,"** each with a small secondary sub-tab pair
+that only appears once that top-level view is active. `placesTab`/`tripsTab`
+persist across navigation the same way radius or category do — switching
+away and back to Places returns to whichever sub-tab was last open, not a
+hard reset to Pinned every time.
+
+**The two merges weren't equally easy, and that's worth recording.**
+Pinned and Recent were already computed inline within `render()`'s own
+item-selection branch — both flat card lists sharing the exact same
+rendering, pagination, and search-box code, differing only in which array
+they read from. Merging them was almost entirely a rename. Saved and Recap,
+by contrast, already dispatched to two genuinely separate functions
+(`renderSaved()`, `renderRecap()`) with different layouts — merging those
+meant wrapping a shared sub-tab bar around an *existing* dispatch rather than
+unifying the rendering itself, which stayed untouched.
 
 **`dietFilter` has to be threaded through two separate filter chains, not
 one.** `render()`'s own item list and Surprise Me's candidate-pool
