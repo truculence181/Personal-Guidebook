@@ -1027,7 +1027,7 @@
     color:var(--ink-faint);
     font-size:11px;
   }
-  #catSelect, #skinSelect, #radiusSelect{
+  #catSelect, #skinSelect, #radiusSelect, #dietSelect{
     -webkit-appearance:none; appearance:none;
     width:100%;
     background:var(--surface);
@@ -1041,9 +1041,9 @@
     cursor:pointer;
     box-shadow:var(--shadow-xs);
   }
-  #catSelect:focus-visible, #skinSelect:focus-visible, #radiusSelect:focus-visible{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);}
-  #catSelect:disabled, #skinSelect:disabled, #radiusSelect:disabled{cursor:default;}
-  #catSelect option, #skinSelect option, #radiusSelect option{background:var(--surface); color:var(--ink);}
+  #catSelect:focus-visible, #skinSelect:focus-visible, #radiusSelect:focus-visible, #dietSelect:focus-visible{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);}
+  #catSelect:disabled, #skinSelect:disabled, #radiusSelect:disabled, #dietSelect:disabled{cursor:default;}
+  #catSelect option, #skinSelect option, #radiusSelect option, #dietSelect option{background:var(--surface); color:var(--ink);}
 
   .chip.recent-chip{color:var(--accent-deep);}
   .chip.recent-chip.active{background:var(--accent); border-color:var(--accent); color:#fff;}
@@ -1397,6 +1397,10 @@
   .status-closed{color:var(--rust); font-weight:500;}
   .status-unknown{color:var(--ink-faint);}
   .dist{color:var(--ink-soft);}
+  .wheelchair-badge{font-size:11px; margin-right:2px;}
+  .wc-yes{color:var(--good);}
+  .wc-limited{color:var(--ink-faint);}
+  .wc-no{color:var(--ink-faint); opacity:.55;}
 
   .card-actions{
     display:flex; border-top:1px solid var(--line);
@@ -1844,6 +1848,41 @@
     padding:14px 16px;
     margin-bottom:14px;
   }
+
+  .recap-day{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:16px;
+    box-shadow:var(--shadow-sm);
+    padding:16px;
+    margin-bottom:14px;
+  }
+  .recap-day-header{
+    font-family:var(--font-display);
+    font-size:17px; font-weight:600;
+    margin-bottom:12px;
+    color:var(--ink);
+  }
+  .recap-stop{
+    padding:10px 0;
+    border-top:1px solid var(--line);
+  }
+  .recap-stop:first-of-type{border-top:none; padding-top:0;}
+  .recap-stop-name{
+    font-family:var(--font-body);
+    font-weight:600; font-size:14px;
+    color:var(--ink);
+    margin-bottom:4px;
+  }
+  .recap-entry{
+    font-family:var(--font-body);
+    font-size:13px; line-height:1.5;
+    color:var(--ink-soft);
+  }
+  .recap-entry-empty{
+    color:var(--ink-faint);
+    font-style:italic;
+  }
   .saved-name{
     font-family:var(--font-display); font-weight:600; font-size:16px;
     margin-bottom:4px;
@@ -2129,6 +2168,7 @@
       <button class="chip plan-chip" id="viewPlan">◷ Day plan</button>
       <button class="chip saved-chip" id="viewSaved">❖ Saved</button>
       <button class="chip recent-chip" id="viewRecent">◴ Recent</button>
+      <button class="chip recap-chip" id="viewRecap">📖 Recap</button>
       <span class="chip-divider"></span>
       <div class="select-wrap">
         <select id="catSelect" aria-label="Category">
@@ -2147,6 +2187,18 @@
           <option value="20">20 mi</option>
           <option value="30">30 mi</option>
           <option value="50">50 mi</option>
+        </select>
+      </div>
+    </div>
+    <div class="radius-row" id="dietRow" style="display:none;">
+      <span class="radius-label">Diet</span>
+      <div class="select-wrap radius-select-wrap">
+        <select id="dietSelect" aria-label="Dietary filter">
+          <option value="any">Any</option>
+          <option value="vegetarian">Vegetarian</option>
+          <option value="vegan">Vegan</option>
+          <option value="halal">Halal</option>
+          <option value="kosher">Kosher</option>
         </select>
       </div>
     </div>
@@ -2311,6 +2363,8 @@ let lastLabel = null;       // human name for that centre
 let activePlaces = SEED_PLACES;
 let activeView = "browse";   // browse | pinned | plan
 let activeCat = "all";       // all | category key
+let dietFilter = "any";      // any | vegetarian | vegan | halal | kosher
+const DIET_CATS = new Set(['food', 'coffee', 'bars']);
 let openOnly = false;
 let pageSize = 10;          // 10 | 20 | 50 | 100
 let page = 0;               // zero-indexed
@@ -2506,9 +2560,8 @@ function buildICS(days){
   // files that use bare LF.
   return lines.join('\r\n');
 }
-function exportICS(days, filename){
-  const ics = buildICS(days);
-  const blob = new Blob([ics], {type:'text/calendar;charset=utf-8'});
+function downloadTextFile(content, filename, mimeType){
+  const blob = new Blob([content], {type: mimeType});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -2517,6 +2570,43 @@ function exportICS(days, filename){
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function exportICS(days, filename){
+  downloadTextFile(buildICS(days), filename, 'text/calendar;charset=utf-8');
+}
+
+/* ---------- journal export ----------
+   One markdown document, entries read chronologically like an actual diary
+   rather than grouped by place — a trip usually spans several places in a
+   day, and reading "what did I do that day" beats "what did I write about
+   this restaurant" as the natural shape for looking back on it. */
+function buildJournalMarkdown(){
+  const rows = [];
+  Object.keys(journalStore).forEach(placeId => {
+    const place = pinnedStore[placeId];
+    const name = place ? place.name : 'A place no longer pinned';
+    journalFor(placeId).forEach(entry => {
+      rows.push({date: entry.date, name, text: entry.text});
+    });
+  });
+  rows.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  if(!rows.length) return '# My Vagatio Journal\n\nNothing written yet.\n';
+
+  const lines = ['# My Vagatio Journal', ''];
+  let lastDate = null;
+  rows.forEach(r => {
+    if(r.date !== lastDate){
+      lines.push(`## ${r.date || 'Undated'}`);
+      lastDate = r.date;
+    }
+    lines.push(`**${r.name}**`, '', r.text, '');
+  });
+  return lines.join('\n');
+}
+function exportJournal(){
+  const today = new Date().toISOString().slice(0, 10);
+  downloadTextFile(buildJournalMarkdown(), `vagatio-journal-${today}.md`, 'text/markdown;charset=utf-8');
 }
 
 function saveCurrentPlanAsFavorite(){
@@ -3501,6 +3591,14 @@ async function fetchLivePlaces(lat, lon, radiusMi){
             // separate so the UI can be honest about which one it got
             // rather than calling a homepage a "menu".
             menuUrl: el.tags["website:menu"] || null,
+            wheelchair: el.tags.wheelchair || null,  // 'yes' | 'no' | 'limited'
+            cuisine: el.tags.cuisine || null,
+            diet: {
+              vegetarian: el.tags["diet:vegetarian"] === "yes" || el.tags["diet:vegetarian"] === "only",
+              vegan: el.tags["diet:vegan"] === "yes" || el.tags["diet:vegan"] === "only",
+              halal: el.tags["diet:halal"] === "yes" || el.tags["diet:halal"] === "only",
+              kosher: el.tags["diet:kosher"] === "yes" || el.tags["diet:kosher"] === "only"
+            },
             website: el.tags.website || el.tags["contact:website"] || el.tags.url || null,
             photo: photoFor(el.tags),
             _wiki: wikiTitleFor(el.tags),
@@ -4202,6 +4300,56 @@ function slotPickerHTML(p){
   </div>`;
 }
 
+/* ---------- trip recap ----------
+   Not a new stored data structure — just a filtered read over data that
+   already exists. A day plan's own stop list is the record of where you
+   went; journalStore is the record of what you wrote about it. Once a
+   day's date has passed, this pulls both together into something worth
+   looking back on, without needing the app to separately track "trips"
+   as their own archived concept. */
+function todayISO(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function renderRecap(list, label){
+  label.textContent = "Recap";
+  document.getElementById("pager").innerHTML = '';
+  document.querySelector(".page-size").style.display = 'none';
+
+  const today = todayISO();
+  // ISO YYYY-MM-DD strings compare correctly with plain < — no date
+  // parsing needed for this.
+  const pastDays = planDays.filter(d => d.date < today && d.stops.length)
+                            .sort((a, b) => b.date.localeCompare(a.date)); // most recent first
+
+  if(!pastDays.length){
+    list.innerHTML = '<div class="empty">Nothing to look back on yet — once a planned day passes, it shows up here.</div>';
+    updateCompass([]);
+    return;
+  }
+
+  list.innerHTML = pastDays.map(day => {
+    const dayName = new Date(day.date + 'T12:00:00')
+      .toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'});
+    const stopsHtml = day.stops.map(stop => {
+      const entries = journalFor(stop.id).filter(e => e.date === day.date);
+      const entryHtml = entries.length
+        ? entries.map(e => `<div class="recap-entry">${escapeHtml(e.text)}</div>`).join('')
+        : '<div class="recap-entry recap-entry-empty">No journal entry for this stop.</div>';
+      return `<div class="recap-stop">
+        <div class="recap-stop-name">${escapeHtml(stop.name)}</div>
+        ${entryHtml}
+      </div>`;
+    }).join('');
+    return `<div class="recap-day">
+      <div class="recap-day-header">${dayName}</div>
+      ${stopsHtml}
+    </div>`;
+  }).join('');
+
+  updateCompass([]);
+}
 function renderSaved(list, label){
   label.textContent = "Saved plans";
   document.getElementById("pager").innerHTML = '';
@@ -4245,6 +4393,29 @@ let planWeatherLoading = false;
 
 function planSignature(plan){
   return plan.date + '|' + plan.stops.map(s => `${s.id}:${s.lat},${s.lng}`).join(',');
+}
+
+/* ---------- offline plan photos ----------
+   Losing signal is most likely on the day you're actually traveling — the
+   worst possible time for the app to fall back to a generic seed set. The
+   plan's own data (stop names, hours, coordinates) is already safe offline
+   since it lives in the encrypted vault in localStorage; the one thing
+   that genuinely breaks offline is the cover photos, which are ordinary
+   network images the service worker doesn't cache by default. This tells
+   it to, for exactly the photos currently in the trip — nothing else. */
+let planPhotosSig = null;
+
+function ensurePlanPhotosOffline(){
+  if(!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+  const urls = [...new Set(planDays.flatMap(d => d.stops.map(s => s.photo).filter(Boolean)))];
+  const sig = urls.join('|');
+  if(sig === planPhotosSig) return;
+  planPhotosSig = sig;
+  if(urls.length){
+    navigator.serviceWorker.controller.postMessage({type: 'cachePlanPhotos', urls});
+  } else {
+    navigator.serviceWorker.controller.postMessage('clearPlanPhotos');
+  }
 }
 
 async function ensurePlanWeather(){
@@ -4361,6 +4532,7 @@ function renderPlan(list, label){
   document.getElementById("pager").innerHTML = '';
   document.querySelector(".page-size").style.display = 'none';
   ensurePlanWeather(); // fire-and-forget; re-renders itself once data arrives
+  ensurePlanPhotosOffline(); // fire-and-forget; no re-render needed either way
   const dayName = new Date(dayPlan.date + 'T12:00:00')
     .toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'});
   const legs = planLegs();
@@ -4543,6 +4715,11 @@ function render(){
     return;
   }
 
+  if(activeView === "recap"){
+    renderRecap(list, label);
+    return;
+  }
+
   if(activeView === "pinned"){
     items = Object.values(pinnedStore);
     // Your own ratings are the most useful ordering for places you've saved.
@@ -4555,6 +4732,7 @@ function render(){
   } else {
     items = activePlaces.slice();
     if(activeCat !== "all") items = items.filter(p => p.cat === activeCat);
+    if(dietFilter !== "any") items = items.filter(p => p.diet && p.diet[dietFilter]);
   }
   if(openOnly) items = items.filter(p => openStatus(p.hours).open === true);
 
@@ -4588,6 +4766,8 @@ function render(){
       ? "Nothing here yet — places you open will show up so you can find them again."
       : openOnly
         ? "Nothing open right now in this category — try turning off Open now."
+        : dietFilter !== "any"
+        ? `Nothing tagged ${dietFilter} nearby — OSM's dietary data is sparse, so this filters out a lot. Try "Any" for a fuller list.`
         : `Nothing found within ${searchRadiusMi} miles — try a wider radius or another category.`;
     list.innerHTML = `<div class="empty">${msg}</div>`;
     document.getElementById("pager").innerHTML = '';
@@ -4599,6 +4779,13 @@ function render(){
     const status = openStatus(p.hours);
     const statusClass = status.open === true ? "status-open" : status.open === false ? "status-closed" : "status-unknown";
     const distHtml = userLoc ? `<span class="dist">${fmtDist(p._dist)}</span>` : "";
+    const wheelchairHtml = p.wheelchair === 'yes'
+      ? `<span class="wheelchair-badge wc-yes" title="Wheelchair accessible">♿</span>`
+      : p.wheelchair === 'limited'
+      ? `<span class="wheelchair-badge wc-limited" title="Limited wheelchair accessibility">♿</span>`
+      : p.wheelchair === 'no'
+      ? `<span class="wheelchair-badge wc-no" title="Not wheelchair accessible">♿</span>`
+      : "";
     const ratingHtml = p.rating ? `<div class="rating-pill">★ ${p.rating}</div>` : "";
     const hrs = todayHoursText(p.hours);
     const hoursHtml = hrs ? `<div class="card-hours"><span class="hours-day">Today</span><span class="hours-val">${hrs}</span></div>` : "";
@@ -4626,6 +4813,7 @@ function render(){
         ${markRowHTML(p.id)}
         <div class="card-meta">
           <span class="${statusClass}">${status.text}</span>
+          ${wheelchairHtml}
           ${distHtml}
         </div>
         <div class="card-actions">
@@ -4745,6 +4933,15 @@ function render(){
     pager.insertAdjacentHTML('beforeend',
       '<button class="clear-recent" id="clearRecentBtn">Clear history</button>');
     document.getElementById('clearRecentBtn').addEventListener('click', clearRecent);
+  }
+
+  // Only worth offering once there's actually something written — an empty
+  // export button just invites a confusing empty download.
+  if(activeView === 'pinned' && Object.values(journalStore).some(entries => entries.length)){
+    const pager = document.getElementById('pager');
+    pager.insertAdjacentHTML('beforeend',
+      '<button class="clear-recent" id="exportJournalBtn">Export journal</button>');
+    document.getElementById('exportJournalBtn').addEventListener('click', exportJournal);
   }
 
   // Keep a drawer open across re-renders triggered from inside it.
@@ -5312,6 +5509,7 @@ const viewPinned = document.getElementById("viewPinned");
 const viewPlan = document.getElementById("viewPlan");
 const viewSaved = document.getElementById("viewSaved");
 const viewRecent = document.getElementById("viewRecent");
+const viewRecap = document.getElementById("viewRecap");
 const openNowBtn = document.getElementById("openNow");
 
 function syncControls(){
@@ -5323,14 +5521,25 @@ function syncControls(){
   setToggle(viewPlan,   activeView === "plan");
   setToggle(viewSaved,  activeView === "saved");
   setToggle(viewRecent, activeView === "recent");
+  setToggle(viewRecap,  activeView === "recap");
   setToggle(openNowBtn, openOnly);
   catSelect.value = activeCat;
   // Category and distance don't apply to the saved lists, so dim them there.
   const browsing = activeView === "browse";
   catSelect.disabled = !browsing;
-  openNowBtn.disabled = activeView === "plan" || activeView === "saved";
+  openNowBtn.disabled = activeView === "plan" || activeView === "saved" || activeView === "recap";
   document.getElementById("radiusChips").style.opacity = browsing ? "" : ".4";
   document.querySelector(".select-wrap").style.opacity = browsing ? "" : ".4";
+  // Diet only makes sense for food-ish categories — hide it otherwise, and
+  // reset it so leaving Food doesn't leave an invisible filter active that
+  // would silently hide results the next time a food category is picked.
+  const dietRow = document.getElementById("dietRow");
+  const showDiet = browsing && DIET_CATS.has(activeCat);
+  dietRow.style.display = showDiet ? "flex" : "none";
+  if(!showDiet && dietFilter !== "any"){
+    dietFilter = "any";
+    document.getElementById("dietSelect").value = "any";
+  }
   syncListSearch();
 }
 
@@ -5376,11 +5585,17 @@ viewPinned.addEventListener("click", () => setView("pinned"));
 viewPlan.addEventListener("click", () => setView("plan"));
 viewSaved.addEventListener("click", () => setView("saved"));
 viewRecent.addEventListener("click", () => setView("recent"));
+viewRecap.addEventListener("click", () => setView("recap"));
 openNowBtn.addEventListener("click", () => {
   if(activeView === "plan") return;
   openOnly = !openOnly;
   resetPage();
   syncControls();
+  render();
+});
+document.getElementById("dietSelect").addEventListener("change", (e) => {
+  dietFilter = e.target.value;
+  resetPage();
   render();
 });
 catSelect.addEventListener("change", async () => {
@@ -5487,7 +5702,8 @@ document.getElementById("surpriseBtn").addEventListener("click", () => {
   // Surprise from what's currently in view, not the whole unfiltered list —
   // picking Nightlife and then getting a random museum defeats the point
   // of having chosen a category at all.
-  const scoped = activeCat === "all" ? activePlaces : activePlaces.filter(p => p.cat === activeCat);
+  let scoped = activeCat === "all" ? activePlaces : activePlaces.filter(p => p.cat === activeCat);
+  if(dietFilter !== "any") scoped = scoped.filter(p => p.diet && p.diet[dietFilter]);
   if(!scoped.length){
     statusLine.textContent = `Nothing in ${CAT_LABEL[activeCat] || 'this category'} right now — try another filter.`;
     return;
@@ -5506,6 +5722,7 @@ document.getElementById("surpriseBtn").addEventListener("click", () => {
   // computed here matches what actually ends up on screen.
   let items = activePlaces.slice();
   if(activeCat !== "all") items = items.filter(p => p.cat === activeCat);
+  if(dietFilter !== "any") items = items.filter(p => p.diet && p.diet[dietFilter]);
   if(openOnly) items = items.filter(p => openStatus(p.hours).open === true);
   if(userLoc){
     items.forEach(p => p._dist = haversine(userLoc.lat, userLoc.lng, p.lat, p.lng));
